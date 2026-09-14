@@ -20,9 +20,16 @@ class Matter(BaseModel):
     title: str
     client_name: str
     authorized_user_ids: list[str] = Field(default_factory=list)
+    screened_user_ids: list[str] = Field(default_factory=list)
     canary_token: str
     documents: list[Document] = Field(default_factory=list)
 
     def is_user_authorized(self, user_id: str) -> bool:
-        """Returns True if the user is explicitly on the team for this matter."""
+        """A user is authorized ONLY if:
+
+        1. They are NOT on the ethical screen list.
+        2. They ARE explicitly on the authorized team list (or general access list).
+        """
+        if user_id in self.screened_user_ids:
+            return False
         return user_id in self.authorized_user_ids
