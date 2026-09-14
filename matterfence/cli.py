@@ -1,14 +1,22 @@
+import json
+from enum import Enum
+from pathlib import Path
+from typing import Annotated
+
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from matterfence.core.runner import (
+    Finding,
     TestStatus,
+    run_auth_scenario,
     run_mf_inject_001,
     run_mf_matter_001,
     run_mf_priv_001,
     run_mf_wall_001,
 )
+from matterfence.core.scenario import load_auth_scenario
 from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
 
 app = typer.Typer(
@@ -19,6 +27,103 @@ app = typer.Typer(
 )
 
 console = Console()
+
+
+class TargetSelection(str, Enum):
+    both = "both"
+    secure = "secure"
+    vulnerable = "vulnerable"
+
+
+def _print_finding(finding: Finding) -> None:
+    """Render identifying evidence, never raw target responses or documents."""
+    console.print(
+        f"\n{finding.scenario_id} v{finding.scenario_version} | "
+        f"{finding.target_name}",
+        markup=False,
+    )
+    console.print(
+        f"User: {finding.actor.name} ({finding.actor.id})\n"
+        f"Authorized matters: {', '.join(finding.authorized_matter_ids)}\n"
+        f"Expected: {finding.expected_behavior}",
+        markup=False,
+    )
+    for resource in finding.prohibited_resources:
+        retrieved = (
+            "unknown"
+            if resource.retrieved is None
+            else str(resource.retrieved).lower()
+        )
+        console.print(
+            f"Forbidden: {resource.matter_id} / {resource.document_title} "
+            f"({resource.document_id})\n"
+            f"Canary: {resource.canary_token}\n"
+            f"Evidence: retrieved={retrieved}; "
+            f"matter canary disclosed={str(resource.disclosed).lower()}",
+            markup=False,
+        )
+    console.print(
+        f"Observed: {finding.observed}\n"
+        f"Result: {finding.status.value} | "
+        f"Failure severity: {finding.severity.title()}\n"
+        f"Remediation: {finding.remediation}",
+        markup=False,
+    )
+
+
+@app.command("run")
+def run(
+    scenario_file: Annotated[
+        Path | None,
+        typer.Argument(help="Scenario JSON; defaults to bundled MF-AUTH-001."),
+    ] = None,
+    target: Annotated[
+        TargetSelection, typer.Option(help="Local mock target to test.")
+    ] = TargetSelection.both,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit a JSON array of findings.")
+    ] = False,
+) -> None:
+    """Run one observed cross-matter scenario.
+
+    The vulnerable demo intentionally fails.
+    """
+    try:
+        scenario = load_auth_scenario(scenario_file)
+    except (OSError, ValueError):
+        typer.echo(
+            "Invalid scenario: provide readable UTF-8 JSON matching version 1.0.",
+            err=True,
+        )
+        raise typer.Exit(code=2) from None
+
+    targets = {
+        TargetSelection.vulnerable: VulnerableMockTarget(),
+        TargetSelection.secure: SecureMockTarget(),
+    }
+    selected = (
+        list(targets.values())
+        if target == TargetSelection.both
+        else [targets[target]]
+    )
+    findings = [run_auth_scenario(item, scenario) for item in selected]
+    if json_output:
+        typer.echo(
+            json.dumps(
+                [item.model_dump(mode="json") for item in findings], indent=2
+            )
+        )
+    else:
+        console.print("MatterFence: local synthetic authorization test (mock targets).")
+        for finding in findings:
+            _print_finding(finding)
+
+    exit_code = 0
+    if any(item.status == TestStatus.ERROR for item in findings):
+        exit_code = 2
+    elif any(item.status == TestStatus.FAIL for item in findings):
+        exit_code = 1
+    raise typer.Exit(code=exit_code)
 
 
 @app.command("scan")
