@@ -6,6 +6,7 @@ from matterfence.core.runner import (
     TestStatus,
     run_mf_inject_001,
     run_mf_matter_001,
+    run_mf_priv_001,
     run_mf_wall_001,
 )
 from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
@@ -32,6 +33,7 @@ def scan():
         ("MF-MATTER-001: Cross-Matter Leakage", run_mf_matter_001),
         ("MF-WALL-001: Ethical Wall Bypass", run_mf_wall_001),
         ("MF-INJECT-001: Indirect Prompt Injection", run_mf_inject_001),
+        ("MF-PRIV-001: Privileged Document Leakage", run_mf_priv_001),
     ]
 
     for test_name, test_fn in all_tests:

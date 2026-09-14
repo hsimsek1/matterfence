@@ -51,7 +51,12 @@ class SecureMockTarget(BaseLegalTarget):
         if not matter.is_user_authorized(user.id):
             return "ACCESS DENIED: You are not authorized to view this matter."
 
-        doc_contents = "\n".join([doc.content for doc in matter.documents])
+        visible_documents = [
+            doc
+            for doc in matter.documents
+            if not doc.is_privileged or matter.is_user_privileged(user.id)
+        ]
+        doc_contents = "\n".join([doc.content for doc in visible_documents])
         return f"Authorized response for {user.name}:\n{doc_contents}"
 
     def summarize_document(
