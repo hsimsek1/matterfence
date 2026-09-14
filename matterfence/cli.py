@@ -2,7 +2,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from matterfence.core.runner import TestStatus, run_mf_matter_001, run_mf_wall_001
+from matterfence.core.runner import (
+    TestStatus,
+    run_mf_inject_001,
+    run_mf_matter_001,
+    run_mf_wall_001,
+)
 from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
 
 app = typer.Typer(
@@ -26,6 +31,7 @@ def scan():
     all_tests = [
         ("MF-MATTER-001: Cross-Matter Leakage", run_mf_matter_001),
         ("MF-WALL-001: Ethical Wall Bypass", run_mf_wall_001),
+        ("MF-INJECT-001: Indirect Prompt Injection", run_mf_inject_001),
     ]
 
     for test_name, test_fn in all_tests:
