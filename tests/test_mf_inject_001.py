@@ -119,7 +119,12 @@ def test_scan_includes_all_three_benchmarks(monkeypatch):
     result = CliRunner().invoke(app, ["scan"])
 
     assert result.exit_code == 0
-    for test_id in ("MF-MATTER-001", "MF-WALL-001", "MF-INJECT-001"):
+    for test_id in (
+        "MF-MATTER-001",
+        "MF-WALL-001",
+        "MF-INJECT-001",
+        "MF-PRIV-001",
+    ):
         assert test_id in result.output
-    assert result.output.count("FAIL") == 3
-    assert result.output.count("PASS") == 3
+    assert result.output.count("FAIL") == 4
+    assert result.output.count("PASS") == 4

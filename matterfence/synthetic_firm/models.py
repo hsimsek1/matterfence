@@ -21,6 +21,7 @@ class Matter(BaseModel):
     client_name: str
     authorized_user_ids: list[str] = Field(default_factory=list)
     screened_user_ids: list[str] = Field(default_factory=list)
+    privileged_user_ids: list[str] = Field(default_factory=list)
     canary_token: str
     documents: list[Document] = Field(default_factory=list)
 
@@ -33,3 +34,7 @@ class Matter(BaseModel):
         if user_id in self.screened_user_ids:
             return False
         return user_id in self.authorized_user_ids
+
+    def is_user_privileged(self, user_id: str) -> bool:
+        """Return whether an authorized, unscreened user may view privileged records."""
+        return self.is_user_authorized(user_id) and user_id in self.privileged_user_ids
