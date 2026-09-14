@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build & distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing & Linting caches
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
