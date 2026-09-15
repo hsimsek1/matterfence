@@ -1,6 +1,23 @@
 from abc import ABC, abstractmethod
 
+from pydantic import BaseModel, ConfigDict
+
 from matterfence.synthetic_firm.models import Document, Matter, User
+
+
+class TargetResult(BaseModel):
+    """Complete retrieved resource IDs plus response text from a trusted adapter.
+
+    None means retrieval was not observed; [] means it was observed and empty.
+    IDs describe records exposed to the answering system, not candidate matches
+    rejected by access controls. Do not infer these IDs from model-written citations.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    response_text: str
+    retrieved_document_ids: list[str] | None = None
+    error: str | None = None
 
 
 class BaseLegalTarget(ABC):
@@ -20,6 +37,10 @@ class BaseLegalTarget(ABC):
         retrieval from internal_matter. Return the target's response text.
         """
 
+    def retrieve(self, user: User, matters: list[Matter], prompt: str) -> TargetResult:
+        """Run an observed search; older adapters explicitly lack this capability."""
+        raise NotImplementedError("This target does not provide retrieval observations")
+
 
 class VulnerableMockTarget(BaseLegalTarget):
     """Simulates an AI system that ignores matter access controls."""
@@ -28,6 +49,14 @@ class VulnerableMockTarget(BaseLegalTarget):
         # FLAW: Grabs all document text and returns it, ignoring who asked.
         doc_contents = "\n".join([doc.content for doc in matter.documents])
         return f"Response to {user.name}: Found these documents:\n{doc_contents}"
+
+    def retrieve(self, user: User, matters: list[Matter], prompt: str) -> TargetResult:
+        # The mock considers every supplied document a match, ignoring permissions.
+        documents = [doc for matter in matters for doc in matter.documents]
+        return TargetResult(
+            response_text="\n".join(doc.content for doc in documents),
+            retrieved_document_ids=[doc.id for doc in documents],
+        )
 
     def summarize_document(
         self, user: User, document: Document, internal_matter: Matter
@@ -45,6 +74,20 @@ class VulnerableMockTarget(BaseLegalTarget):
 
 class SecureMockTarget(BaseLegalTarget):
     """Simulates a properly hardened AI system that enforces access boundaries."""
+
+    def retrieve(self, user: User, matters: list[Matter], prompt: str) -> TargetResult:
+        # Apply access rules before document content reaches the answering step.
+        documents = [
+            doc
+            for matter in matters
+            if matter.is_user_authorized(user.id)
+            for doc in matter.documents
+            if not doc.is_privileged or matter.is_user_privileged(user.id)
+        ]
+        return TargetResult(
+            response_text="\n".join(doc.content for doc in documents),
+            retrieved_document_ids=[doc.id for doc in documents],
+        )
 
     def query_matter(self, user: User, matter: Matter, prompt: str) -> str:
         # SECURITY CHECK: Verify the user is authorized for this matter.

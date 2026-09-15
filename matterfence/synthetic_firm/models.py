@@ -1,13 +1,17 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     name: str
     role: str  # e.g., "Partner", "Associate", "Paralegal"
 
 
 class Document(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     matter_id: str
     title: str
@@ -16,6 +20,8 @@ class Document(BaseModel):
 
 
 class Matter(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     title: str
     client_name: str
