@@ -30,3 +30,15 @@ jobs:
 
       - name: Run benchmarks against the secure target
         run: python -m matterfence.cli run --target secure
+
+      - name: Build and install the wheel in a fresh environment
+        run: |
+          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/matterfence-wheel" .
+          python -m venv "$RUNNER_TEMP/matterfence-installed"
+          "$RUNNER_TEMP/matterfence-installed/bin/python" -m pip install "$RUNNER_TEMP"/matterfence-wheel/*.whl pytest
+
+      - name: Test the installed command outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: >-
+          "$RUNNER_TEMP/matterfence-installed/bin/python" -I -m pytest -q
+          --import-mode=importlib "$GITHUB_WORKSPACE/tests/test_installed_cli.py"
