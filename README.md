@@ -100,5 +100,11 @@ python -m ruff check .
 ```
 
 GitHub Actions runs these checks and the secure golden scenario on Python 3.12.
+It also builds a wheel (the installable Python package), installs it with pytest
+in a fresh virtual environment, and tests the installed command from an empty
+temporary directory. This catches missing scenario JSON and broken command entry
+points. The three installed-command tests run in the regular suite too; the fresh
+CI environment is what verifies the wheel independently of the source checkout.
+
 See the [audit and milestone walkthrough](docs/mf-auth-001.md) for the scenario
 contract, function inputs/outputs, tests, remaining limitations, and PR scope.
