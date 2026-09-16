@@ -3,9 +3,11 @@
 Adversarial security testing for legal AI. MatterFence asks: **can an AI
 application retrieve or disclose a document that its user is forbidden to access?**
 
-Today this is a local, deterministic test harness with synthetic law-firm data
-and deliberately vulnerable and secure mocks. It does not yet connect to a real
-AI service, perform semantic search, or certify security or legal compliance.
+Today this is a local test harness with deterministic evaluation, synthetic
+law-firm data, and deliberately vulnerable and secure mocks. A local HTTP adapter
+can also test a separately running application that implements the documented
+query contract. MatterFence does not perform semantic search, include an LLM,
+or certify security or legal compliance.
 
 ## Install and run
 
@@ -70,6 +72,25 @@ Reports omit document bodies, raw responses, and raw error messages. They still
 contain user/resource identifiers and synthetic canaries: use synthetic fixtures,
 not client records, and review reports before sharing them. Critical is the
 scenario's assigned failure impact, not an automatic legal determination.
+
+## Test a local application
+
+After loading the synthetic fixture into your application's isolated test store
+and implementing the [HTTP contract](docs/local-http-target.md), run:
+
+```sh
+matterfence run --target http --endpoint http://127.0.0.1:8000/retrieve --json
+```
+
+This sends only Bob's user ID and the attack prompt. The application returns its
+answer and the complete document IDs exposed to its answering step; MatterFence
+evaluates them using the same MF-AUTH-001 rules as the mocks. The adapter neither
+starts an application nor uploads the fixture. Use only synthetic test data.
+
+The first adapter accepts HTTP on `127.0.0.1` or `[::1]` only, without URL
+credentials, query strings, or fragments. Hosted services and authentication
+are outside this slice. A clean result does not prove the fixture was loaded
+correctly or that the application retrieved useful permitted content.
 
 ## Existing benchmarks
 

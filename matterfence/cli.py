@@ -17,6 +17,7 @@ from matterfence.core.runner import (
     run_mf_wall_001,
 )
 from matterfence.core.scenario import load_auth_scenario
+from matterfence.targets.http import HttpLegalTarget
 from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
 
 app = typer.Typer(
@@ -33,6 +34,7 @@ class TargetSelection(str, Enum):
     both = "both"
     secure = "secure"
     vulnerable = "vulnerable"
+    http = "http"
 
 
 def _print_finding(finding: Finding) -> None:
@@ -78,8 +80,12 @@ def run(
         typer.Argument(help="Scenario JSON; defaults to bundled MF-AUTH-001."),
     ] = None,
     target: Annotated[
-        TargetSelection, typer.Option(help="Local mock target to test.")
+        TargetSelection, typer.Option(help="Mock target or local HTTP application.")
     ] = TargetSelection.both,
+    endpoint: Annotated[
+        str | None,
+        typer.Option(help="Loopback HTTP query URL; required only for --target http."),
+    ] = None,
     json_output: Annotated[
         bool, typer.Option("--json", help="Emit a JSON array of findings.")
     ] = False,
@@ -97,15 +103,33 @@ def run(
         )
         raise typer.Exit(code=2) from None
 
-    targets = {
-        TargetSelection.vulnerable: VulnerableMockTarget(),
-        TargetSelection.secure: SecureMockTarget(),
-    }
-    selected = (
-        list(targets.values())
-        if target == TargetSelection.both
-        else [targets[target]]
-    )
+    try:
+        if target == TargetSelection.http:
+            if endpoint is None:
+                raise ValueError("HTTP target requires an endpoint.")
+            selected = [HttpLegalTarget(endpoint)]
+        else:
+            if endpoint is not None:
+                raise ValueError("Only the HTTP target accepts an endpoint.")
+            targets = {
+                TargetSelection.vulnerable: VulnerableMockTarget(),
+                TargetSelection.secure: SecureMockTarget(),
+            }
+            selected = (
+                list(targets.values())
+                if target == TargetSelection.both
+                else [targets[target]]
+            )
+    except ValueError:
+        typer.echo(
+            "Invalid target options: use --target http with --endpoint "
+            "http://127.0.0.1:PORT/path (or http://[::1]:PORT/path), "
+            "without credentials, query strings, or fragments. "
+            "Omit --endpoint for mock targets.",
+            err=True,
+        )
+        raise typer.Exit(code=2) from None
+
     findings = [run_auth_scenario(item, scenario) for item in selected]
     if json_output:
         typer.echo(
@@ -114,7 +138,8 @@ def run(
             )
         )
     else:
-        console.print("MatterFence: local synthetic authorization test (mock targets).")
+        target_kind = "HTTP target" if target == TargetSelection.http else "mock targets"
+        console.print(f"MatterFence: local synthetic authorization test ({target_kind}).")
         for finding in findings:
             _print_finding(finding)
 
