@@ -92,6 +92,28 @@ credentials, query strings, or fragments. Hosted services and authentication
 are outside this slice. A clean result does not prove the fixture was loaded
 correctly or that the application retrieved useful permitted content.
 
+### Run the included reference application
+
+MatterFence includes a deterministic reference application so you can try the
+connection without building another service first. Open two terminals and
+activate your MatterFence virtual environment in each:
+
+```sh
+# Terminal 1: start the synthetic application (Ctrl+C stops it)
+python -m matterfence.reference_app --port 0
+
+# Terminal 2: paste the URL printed by Terminal 1
+matterfence run --target http --endpoint http://127.0.0.1:PORT/retrieve --json
+```
+
+The first command prints the actual available port. The second should report a
+PASS, retrieve `DOC_M101_TIMELINE`, and show `false` for M105 retrieval and
+canary disclosure. This app intentionally returns every document readable by
+the selected synthetic user; it does not perform semantic search, use an LLM, or
+provide production authentication. Read the
+[reference app walkthrough](docs/reference-app.md) for the request, permission
+checks, response, and tests.
+
 ## Existing benchmarks
 
 `matterfence scan` preserves the original four benchmarks against both mocks:
@@ -120,12 +142,14 @@ python -m pytest -q
 python -m ruff check .
 ```
 
-GitHub Actions runs these checks and the secure golden scenario on Python 3.12.
+GitHub Actions runs these checks, the secure golden scenario, and the packaged
+reference-app integration on Python 3.12.
 It also builds a wheel (the installable Python package), installs it with pytest
 in a fresh virtual environment, and tests the installed command from an empty
 temporary directory. This catches missing scenario JSON and broken command entry
-points. The three installed-command tests run in the regular suite too; the fresh
-CI environment is what verifies the wheel independently of the source checkout.
+points and reference-app integration problems. These installed-package tests run
+in the regular suite too; the fresh CI environment verifies the wheel
+independently of the source checkout.
 
 See the [audit and milestone walkthrough](docs/mf-auth-001.md) for the scenario
 contract, function inputs/outputs, tests, remaining limitations, and PR scope.
