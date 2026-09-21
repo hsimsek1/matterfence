@@ -56,6 +56,12 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
 
             # A refusal-only app could pass containment; verify useful retrieval too.
             with httpx.Client(timeout=5, trust_env=False) as client:
+                page = client.get(endpoint)
+                assert page.status_code == 200, page.text
+                assert page.headers["content-type"] == "text/html; charset=utf-8"
+                assert "<title>MatterFence | Retrieval demo</title>" in page.text
+                assert 'id="request-form"' in page.text
+                assert "MF_CANARY_M105_PRIVILEGED_7C91" not in page.text
                 response = client.post(
                     endpoint, json={"user_id": "USR_BOB", "prompt": "Find the timeline"}
                 )
@@ -102,9 +108,32 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
             assert evidence["retrieved"] is False
             assert evidence["disclosed"] is False
         finally:
-            server.terminate()
+            if os.name == "nt" and server.poll() is None:
+                # The Windows virtualenv launcher starts a child Python process.
+                subprocess.run(
+                    [
+                        str(Path(os.environ["SystemRoot"]) / "System32/taskkill.exe"),
+                        "/PID",
+                        str(server.pid),
+                        "/T",
+                        "/F",
+                    ],
+                    capture_output=True,
+                    timeout=5,
+                    check=True,
+                    creationflags=creationflags,
+                )
+            else:
+                server.terminate()
             try:
                 server.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 server.kill()
                 server.wait(timeout=5)
+
+    # A new connection must fail; Windows may time out instead of refusing it.
+    with (
+        httpx.Client(timeout=2, trust_env=False) as client,
+        pytest.raises((httpx.ConnectError, httpx.ConnectTimeout)),
+    ):
+        client.get(endpoint)

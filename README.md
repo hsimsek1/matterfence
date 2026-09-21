@@ -106,13 +106,24 @@ python -m matterfence.reference_app --port 0
 matterfence run --target http --endpoint http://127.0.0.1:PORT/retrieve --json
 ```
 
-The first command prints the actual available port. The second should report a
+Open the URL printed by the first command in your browser to try the local demo.
+Send a request as `USR_BOB` or `USR_ALICE` to see their permitted document text and
+IDs. The page also provides the benchmark command with the correct port filled in.
+The demo displays application responses; the CLI evaluates the benchmark.
+
+The second command should report a
 PASS, retrieve `DOC_M101_TIMELINE`, and show `false` for M105 retrieval and
 canary disclosure. This app intentionally returns every document readable by
 the selected synthetic user; it does not perform semantic search, use an LLM, or
 provide production authentication. Read the
 [reference app walkthrough](docs/reference-app.md) for the request, permission
 checks, response, and tests.
+
+In PowerShell, you can also start the demo without activating the environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m matterfence.reference_app --port 0
+```
 
 ## Existing benchmarks
 

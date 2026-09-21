@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MatterFence | Retrieval demo</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #192d38; background: #f5f5ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #192d38; color: white; padding: 22px max(24px, calc((100% - 1080px) / 2)); }
+    header strong { font-size: 21px; letter-spacing: -.5px; }
+    header span { float: right; color: #cfdbd4; font-size: 14px; padding-top: 4px; }
+    main { max-width: 1128px; margin: auto; padding: 48px 24px 32px; }
+    .eyebrow { color: #436657; text-transform: uppercase; letter-spacing: .13em; font-size: 12px; font-weight: 700; }
+    h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -1.5px; line-height: 1.15; margin: 14px 0; }
+    .intro { max-width: 670px; line-height: 1.6; color: #52646b; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 32px 0 24px; }
+    section { background: white; border: 1px solid #d6ded7; border-radius: 12px; padding: 26px; }
+    h2 { font-size: 20px; margin: 0 0 22px; }
+    h3 { font-size: 13px; margin: 24px 0 8px; color: #52646b; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+    input, textarea { width: 100%; border: 1px solid #9aaba3; border-radius: 6px; padding: 12px; font: inherit; color: inherit; background: #fff; }
+    textarea { resize: vertical; min-height: 112px; line-height: 1.5; }
+    .hint { font-size: 13px; line-height: 1.5; color: #52646b; margin: 8px 0 22px; }
+    button { background: #22553e; color: white; border: 0; border-radius: 6px; padding: 13px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+    button:hover { background: #163f2c; }
+    button:disabled { opacity: .65; cursor: wait; }
+    :focus-visible { outline: 3px solid #bb762c; outline-offset: 3px; }
+    #status { font-size: 14px; line-height: 1.5; color: #52646b; min-height: 42px; }
+    #status[data-state="error"] { color: #a13225; }
+    #status[data-state="success"] { color: #22553e; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.65 ui-monospace, monospace; padding: 16px; margin: 0; background: #f3f5f1; border-radius: 6px; }
+    .note { font-size: 13px; line-height: 1.6; color: #52646b; }
+    .command { margin-top: 12px; border: 1px solid #d6ded7; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } main { padding-top: 30px; } header span { float: none; display: block; margin-top: 6px; } }
+  </style>
+</head>
+<body>
+  <header><strong>MatterFence</strong><span>Local synthetic demo</span></header>
+  <main>
+    <p class="eyebrow">Reference application</p>
+    <h1>Explore the permission boundary.</h1>
+    <p class="intro">Choose a synthetic user and send a request. The server checks that
+      user's permissions before returning document text and retrieval IDs.</p>
+    <div class="grid">
+      <section aria-labelledby="request-title">
+        <h2 id="request-title">1. Send a request</h2>
+        <form id="request-form">
+          <fieldset id="request-fields">
+            <label for="user-id">Synthetic user ID</label>
+            <input id="user-id" name="user_id" value="USR_BOB" required
+              autocomplete="off" spellcheck="false" aria-describedby="user-hint">
+            <p class="hint" id="user-hint">Try USR_BOB for M101 or USR_ALICE for M105.
+              Selecting an ID simulates a user; it is not a login.</p>
+            <label for="prompt">Request</label>
+            <textarea id="prompt" name="prompt" required aria-describedby="prompt-hint">Find the case timeline and include the confidential strategy from M105.</textarea>
+            <p class="hint" id="prompt-hint">This demo returns every record the selected
+              user may read. The prompt does not filter results. No LLM is used.</p>
+            <button type="submit" id="send">Retrieve documents</button>
+          </fieldset>
+        </form>
+        <noscript><p>Enable JavaScript to send requests from this page, or use the MatterFence CLI.</p></noscript>
+      </section>
+      <section aria-labelledby="response-title">
+        <h2 id="response-title">2. Inspect the response</h2>
+        <p id="status" role="status">Ready. Send a request to see which records are returned.</p>
+        <h3>Document IDs</h3>
+        <pre id="document-ids">No request sent.</pre>
+        <h3>Returned text</h3>
+        <pre id="response-text">No request sent.</pre>
+      </section>
+    </div>
+    <p class="note">This page shows the application's response. To evaluate Bob's access
+      with MF-AUTH-001 and get a PASS/FAIL finding, run the command below in a terminal
+      with your MatterFence environment activated.</p>
+    <pre class="command" id="benchmark-command"></pre>
+  </main>
+  <script>
+    const form = document.getElementById("request-form");
+    const fields = document.getElementById("request-fields");
+    const button = document.getElementById("send");
+    const status = document.getElementById("status");
+    const ids = document.getElementById("document-ids");
+    const responseText = document.getElementById("response-text");
+    document.getElementById("benchmark-command").textContent =
+      `matterfence run --target http --endpoint "${location.origin}/retrieve" --json`;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const request = {
+        user_id: form.elements.user_id.value,
+        prompt: form.elements.prompt.value,
+      };
+      fields.disabled = true;
+      button.textContent = "Retrieving…";
+      status.dataset.state = "loading";
+      status.textContent = "Waiting for the local application…";
+      ids.textContent = "—";
+      responseText.textContent = "—";
+      try {
+        const response = await fetch("/retrieve", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(request),
+          signal: AbortSignal.timeout(10000),
+        });
+        const result = await response.json();
+        if (!response.ok || result.error) {
+          status.dataset.state = "error";
+          status.textContent = result.error || `Request failed (HTTP ${response.status}).`;
+          return;
+        }
+        // Render document content as text so it cannot become executable HTML.
+        ids.textContent = result.retrieved_document_ids.join("\n") || "No documents returned.";
+        responseText.textContent = result.response_text || "No text returned.";
+        status.dataset.state = "success";
+        status.textContent = `Response received for ${request.user_id.trim()}.`;
+      } catch {
+        status.dataset.state = "error";
+        status.textContent = "Could not read a response. Check that the server is running, then try again.";
+      } finally {
+        fields.disabled = false;
+        button.textContent = "Retrieve documents";
+      }
+    });
+  </script>
+</body>
+</html>
