@@ -177,6 +177,34 @@ the CLI exits 2 if any is ERROR, otherwise 1 if any is FAIL, otherwise 0.
 
 ## How the tests prove the slice
 
+### Issue #9: permitted-retrieval evidence
+
+`run_auth_scenario(target, scenario)` still takes the same target and validated
+scenario and returns one `Finding`. The new `permitted_retrieved_document_ids`
+field is a readable subset of the same observed retrieval, not a second request:
+
+- Start with `None` (JSON `null`). Leave it unknown if observations are missing,
+  invalid, or contain unknown IDs, or if execution reported an error.
+- Otherwise, walk the runner's protected scenario in fixture order. Skip matters
+  the actor cannot access, including screened matters. Keep a document's ID only
+  if it was retrieved and the actor may read it, including its privilege rule.
+- Walking the fixture keeps IDs unique and ordered, even if the target repeats
+  or reorders them. If none qualify, the result is `[]`, not unknown.
+
+`_print_finding(finding)` takes that report and prints the IDs, `none observed`,
+or `unknown (incomplete run)`; it returns no new object. JSON includes the same
+field directly. Neither security verdicts nor exit codes change. A vulnerable
+target can retrieve permitted content and still FAIL; an empty trace can pass
+containment but now visibly reports no permitted retrieval. Reported IDs do not
+prove that the answer contains useful content or that documents were relevant.
+
+The tests supply controlled target results and check all three field states,
+screen/privilege filtering, stable ordering, duplicate IDs, and protected policy
+copies. CLI tests check text and JSON while preserving exit codes. Installed CLI
+and reference-app integration tests check that the field survives the full path.
+
+### Regression coverage
+
 Run `python -m pytest -q` and `python -m ruff check .`.
 
 - Mock integration tests assert actual allowed document text and exact retrieved

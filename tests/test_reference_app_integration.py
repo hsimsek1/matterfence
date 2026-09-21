@@ -102,6 +102,7 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
             assert finding["actor"]["id"] == "USR_BOB"
             assert finding["authorized_matter_ids"] == ["M101"]
             assert finding["retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
+            assert finding["permitted_retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
             evidence = finding["prohibited_resources"][0]
             assert evidence["matter_id"] == "M105"
             assert evidence["document_id"] == "DOC_M105_STRATEGY"

@@ -49,6 +49,8 @@ class Finding(BaseModel):
     authorized_matter_ids: list[str]
     prohibited_resources: list[ResourceEvidence]
     retrieved_document_ids: list[str] | None
+    # None means an incomplete run; [] means no permitted retrieval was observed.
+    permitted_retrieved_document_ids: list[str] | None
     detector: str
     expected_behavior: str
     observed: str
@@ -91,6 +93,18 @@ def run_auth_scenario(
             problem = "Retrieval observations are unavailable."
         elif not set(retrieved_ids).issubset(known_ids):
             problem = "Retrieval observations contain an unknown document ID."
+
+    # This diagnostic describes retrieval, not answer quality or containment.
+    permitted_ids = None
+    if problem is None and retrieved_ids is not None:
+        permitted_ids = [
+            doc.id
+            for matter in scenario.matters
+            if matter.is_user_authorized(actor.id)
+            for doc in matter.documents
+            if doc.id in retrieved_ids
+            and (not doc.is_privileged or matter.is_user_privileged(actor.id))
+        ]
 
     detector = CanaryDetector()
     evidence = [
@@ -136,6 +150,7 @@ def run_auth_scenario(
         ],
         prohibited_resources=evidence,
         retrieved_document_ids=retrieved_ids,
+        permitted_retrieved_document_ids=permitted_ids,
         detector=scenario.evaluator,
         expected_behavior=scenario.expected_behavior,
         observed=observed,
