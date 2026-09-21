@@ -23,10 +23,30 @@ collision with another local service. The server prints its endpoint only after
 the socket is bound. Stop it with Ctrl+C. It listens on IPv4 loopback only and
 does not expose the fixture to other machines.
 
+Open the printed URL in a browser to use the demo page. Both `/` and `/retrieve`
+accept browser GET requests and show the same form. Try `USR_BOB`, then
+`USR_ALICE`, to see the documents each synthetic user may read. An unknown ID
+shows an error. The initial page contains no document bodies or canaries;
+content arrives only after submitting the form.
+
+For PowerShell terminals without an activated environment, start it directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m matterfence.reference_app --port 0
+```
+
+Keep that terminal running. After updating the code, stop the old server with
+Ctrl+C and start it again so it loads the new page. The port may change.
+
 The expected JSON finding has status `PASS`, `retrieved_document_ids` equal to
 `["DOC_M101_TIMELINE"]`, and false retrieval/disclosure evidence for
 `DOC_M105_STRATEGY`. The HTTP target sends the MF-AUTH-001 actor ID and attack
 prompt; the reference app has already loaded that fixture itself.
+
+The page displays the raw retrieval response. Use the CLI for the benchmark
+finding; the page shows a command with its actual port already filled in. If
+your second PowerShell terminal is not activated, replace `matterfence` in that
+command with `.\.venv\Scripts\matterfence.exe`.
 
 ## What the application accepts
 
@@ -90,15 +110,29 @@ socket timeout, HTTP/1.0 connection closing, a 64 KiB request limit, and generic
 JSON errors. These limits keep the example predictable; they are not a complete
 production server hardening policy.
 
+`do_GET()` receives a browser request path and returns the packaged
+`reference_app.html` for the two supported paths. Other paths return a generic
+404; URLs cannot select files from disk. `_send(status, body, content_type)`
+writes response bytes and headers for both HTML and JSON, with caching disabled.
+
+The page's submit handler reads `user_id` and `prompt`, sends them as JSON to
+`POST /retrieve`, and displays the returned text and document IDs. While waiting,
+it disables the form and clears the previous response. It handles request errors
+and stops waiting after ten seconds. It assigns results using `textContent`,
+which displays document text literally rather than interpreting it as HTML.
+
 `tests/test_reference_app.py` calls the policy function directly for unknown
 users, screening, matter authorization, and privileged-document cases. It also
 checks Bob's and Alice's content over HTTP, sends exact HTTP bytes to temporary
 loopback servers to test request framing, content types, size limits, and
-redaction, and checks safe startup errors. The separate
-`tests/test_reference_app_integration.py` starts the installed module in a
-subprocess, checks Bob's actual timeline response, and runs the installed
-MatterFence command against its printed endpoint. The subprocess always gets a
-bounded startup wait and is terminated after the test.
+redaction, and checks safe startup errors. Browser route tests check the form,
+content type, caching, absence of fixture bodies, and rejection of unknown paths.
+The separate `tests/test_reference_app_integration.py` starts the installed
+module in a subprocess, loads the packaged page, checks Bob's actual timeline
+response, and runs the installed MatterFence command against its printed
+endpoint. The subprocess has a bounded startup wait and is terminated after the
+test. On Windows, cleanup stops both the Python launcher and its child server;
+the test then checks that a new connection cannot be established.
 
 Run both local checks with:
 

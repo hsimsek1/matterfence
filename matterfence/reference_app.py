@@ -1,6 +1,7 @@
 """A loopback-only synthetic retrieval example, not a production AI service."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import files
 from typing import Annotated
 
 import typer
@@ -54,10 +55,17 @@ def create_server(
     users: list[User], matters: list[Matter], port: int = 8000
 ) -> ThreadingHTTPServer:
     """Bind a local server to a preloaded store; the caller starts and closes it."""
+    page = files("matterfence").joinpath("reference_app.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
         # StreamRequestHandler applies this before reading headers or the body.
         timeout = 5
+
+        def do_GET(self) -> None:
+            if self.path not in {"/", "/retrieve"}:
+                self._error(404, "Unknown endpoint.")
+                return
+            self._send(200, page, "text/html; charset=utf-8")
 
         def do_POST(self) -> None:
             if self.path != "/retrieve":
@@ -111,11 +119,16 @@ def create_server(
 
         def _reply(self, status: int, result: TargetResult) -> None:
             body = result.model_dump_json().encode("utf-8")
+            self._send(status, body, "application/json")
+
+        def _send(self, status: int, body: bytes, content_type: str) -> None:
             self.send_response(status)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
             try:
+                self.end_headers()
                 self.wfile.write(body)
             except OSError:
                 # A client can disconnect while the safe response is written.

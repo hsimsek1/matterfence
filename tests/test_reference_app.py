@@ -3,6 +3,7 @@ import socket
 import threading
 from http.client import HTTPResponse
 
+import httpx
 import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
@@ -132,6 +133,47 @@ def test_unknown_user_is_rejected(scenario):
             scenario.users,
             scenario.matters,
         )
+
+
+def test_browser_page_is_available_without_disclosing_documents(
+    server_factory, scenario
+):
+    server = server_factory()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    with httpx.Client(timeout=2, trust_env=False) as client:
+        home = client.get(base_url + "/")
+        endpoint = client.get(base_url + "/retrieve")
+
+    for response in (home, endpoint):
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/html; charset=utf-8"
+        assert response.headers["cache-control"] == "no-store"
+    assert home.content == endpoint.content
+    assert "<title>MatterFence | Retrieval demo</title>" in home.text
+    assert 'id="request-form"' in home.text
+    assert 'name="user_id"' in home.text
+    assert 'name="prompt"' in home.text
+    for matter in scenario.matters:
+        assert matter.canary_token not in home.text
+        for document in matter.documents:
+            assert document.content not in home.text
+
+
+@pytest.mark.parametrize(
+    "path", ["/PRIVATE_PATH", "/reference_app.py", "/%2e%2e/pyproject.toml"]
+)
+def test_browser_unknown_paths_do_not_serve_files_or_echo_paths(server_factory, path):
+    server = server_factory()
+    with httpx.Client(timeout=2, trust_env=False) as client:
+        response = client.get(f"http://127.0.0.1:{server.server_port}{path}")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"] == "application/json"
+    result = TargetResult.model_validate(response.json())
+    assert result.response_text == ""
+    assert result.retrieved_document_ids is None
+    assert result.error == "Unknown endpoint."
+    assert path not in response.text
 
 
 @pytest.mark.parametrize(
