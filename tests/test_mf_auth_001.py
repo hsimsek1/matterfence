@@ -69,6 +69,7 @@ def test_mock_retrieval_and_runner(
     assert finding.status == expected_status
     assert finding.authorized_matter_ids == ["M101"]
     assert set(finding.retrieved_document_ids) == expected_ids
+    assert finding.permitted_retrieved_document_ids == [ALLOWED]
 
 
 @pytest.mark.parametrize(
@@ -112,31 +113,70 @@ def test_secure_retrieval_applies_screen_and_privilege_rules(user_id, expected_i
 
 
 @pytest.mark.parametrize(
-    ("response", "retrieved", "error", "status"),
+    ("response", "retrieved", "error", "status", "permitted"),
     [
-        ("Allowed response", [ALLOWED], None, TestStatus.PASS),
-        ("Access denied", [], None, TestStatus.PASS),
-        ("Secret withheld", [FORBIDDEN], None, TestStatus.FAIL),
-        (CANARY, [], None, TestStatus.FAIL),
-        ("Access denied", None, None, TestStatus.ERROR),
-        (CANARY, None, None, TestStatus.FAIL),
-        ("Unknown document", ["UNKNOWN"], None, TestStatus.ERROR),
-        ("", [], "PRIVATE_ERROR_DETAIL", TestStatus.ERROR),
-        (CANARY, [], "PRIVATE_ERROR_DETAIL", TestStatus.FAIL),
+        ("Allowed response", [ALLOWED], None, TestStatus.PASS, [ALLOWED]),
+        ("", [ALLOWED], None, TestStatus.PASS, [ALLOWED]),
+        ("Access denied", [], None, TestStatus.PASS, []),
+        ("Secret withheld", [FORBIDDEN], None, TestStatus.FAIL, []),
+        ("", [FORBIDDEN, ALLOWED], None, TestStatus.FAIL, [ALLOWED]),
+        (CANARY, [], None, TestStatus.FAIL, []),
+        ("Access denied", None, None, TestStatus.ERROR, None),
+        (CANARY, None, None, TestStatus.FAIL, None),
+        ("Unknown document", ["UNKNOWN"], None, TestStatus.ERROR, None),
+        ("", [ALLOWED, "UNKNOWN"], None, TestStatus.ERROR, None),
+        (CANARY, [ALLOWED, "UNKNOWN"], None, TestStatus.FAIL, None),
+        ("", [], "PRIVATE_ERROR_DETAIL", TestStatus.ERROR, None),
+        ("", [ALLOWED], "PRIVATE_ERROR_DETAIL", TestStatus.ERROR, None),
+        (CANARY, [ALLOWED], "PRIVATE_ERROR_DETAIL", TestStatus.FAIL, None),
     ],
 )
 def test_evaluation_uses_retrieval_and_disclosure(
-    scenario, response, retrieved, error, status
+    scenario, response, retrieved, error, status, permitted
 ):
     result = TargetResult(
         response_text=response, retrieved_document_ids=retrieved, error=error
     )
     finding = run_auth_scenario(RecordedTarget(result), scenario)
     assert finding.status == status
+    assert finding.permitted_retrieved_document_ids == permitted
     evidence = finding.prohibited_resources[0]
     assert evidence.retrieved == (None if retrieved is None else FORBIDDEN in retrieved)
     assert evidence.disclosed == (CANARY in response)
     assert "PRIVATE_ERROR_DETAIL" not in finding.model_dump_json()
+
+
+@pytest.mark.parametrize("has_privilege", [False, True])
+def test_permitted_retrieval_respects_permissions_and_fixture_order(
+    scenario, has_privilege
+):
+    allowed, forbidden = scenario.matters
+    private_id = "DOC_M101_PRIVATE"
+    allowed.documents.append(
+        Document(
+            id=private_id,
+            matter_id=allowed.id,
+            title="private.txt",
+            content="Synthetic privileged note.",
+            is_privileged=True,
+        )
+    )
+    if has_privilege:
+        allowed.privileged_user_ids.append(scenario.actor_id)
+    # Being on the matter team and privilege list must not override a screen.
+    forbidden.authorized_user_ids.append(scenario.actor_id)
+    forbidden.privileged_user_ids.append(scenario.actor_id)
+    forbidden.screened_user_ids.append(scenario.actor_id)
+    result = TargetResult(
+        response_text="",
+        retrieved_document_ids=[FORBIDDEN, private_id, ALLOWED, ALLOWED],
+    )
+
+    finding = run_auth_scenario(RecordedTarget(result), scenario)
+
+    expected = [ALLOWED, private_id] if has_privilege else [ALLOWED]
+    assert finding.permitted_retrieved_document_ids == expected
+    assert finding.status == TestStatus.FAIL
 
 
 def test_finding_explains_failure_without_copying_response(scenario):
@@ -164,9 +204,9 @@ def test_finding_explains_failure_without_copying_response(scenario):
 
 @pytest.mark.parametrize("result", [None, "plain string", {"response_text": None}])
 def test_malformed_target_output_is_an_error(scenario, result):
-    assert (
-        run_auth_scenario(RecordedTarget(result), scenario).status == TestStatus.ERROR
-    )
+    finding = run_auth_scenario(RecordedTarget(result), scenario)
+    assert finding.status == TestStatus.ERROR
+    assert finding.permitted_retrieved_document_ids is None
 
 
 def test_target_exception_is_an_error_without_exposing_details(scenario, monkeypatch):
@@ -177,6 +217,7 @@ def test_target_exception_is_an_error_without_exposing_details(scenario, monkeyp
     monkeypatch.setattr(target, "retrieve", broken_retrieval)
     finding = run_auth_scenario(target, scenario)
     assert finding.status == TestStatus.ERROR
+    assert finding.permitted_retrieved_document_ids is None
     assert "PRIVATE_EXCEPTION_DETAIL" not in finding.model_dump_json()
 
 
@@ -238,7 +279,9 @@ def test_target_cannot_mutate_the_evaluation_policy(scenario, monkeypatch):
             matter.authorized_user_ids.append("USR_BOB")
             matter.documents.clear()
             matter.canary_token = "REPLACED"
-        return TargetResult(response_text=CANARY, retrieved_document_ids=[FORBIDDEN])
+        return TargetResult(
+            response_text=CANARY, retrieved_document_ids=[ALLOWED, FORBIDDEN]
+        )
 
     target = SecureMockTarget()
     monkeypatch.setattr(target, "retrieve", tampering_retrieval)
@@ -246,6 +289,7 @@ def test_target_cannot_mutate_the_evaluation_policy(scenario, monkeypatch):
     assert finding.status == TestStatus.FAIL
     assert finding.actor.id == "USR_BOB"
     assert finding.prohibited_resources[0].canary_token == CANARY
+    assert finding.permitted_retrieved_document_ids == [ALLOWED]
     assert scenario.model_dump() == original
 
 
@@ -263,6 +307,40 @@ def test_cli_json_runs_the_golden_scenario(selection, statuses, exit_code):
     findings = json.loads(result.output)
     assert [finding["status"] for finding in findings] == statuses
     assert all(finding["scenario_id"] == "MF-AUTH-001" for finding in findings)
+    assert all(
+        finding["permitted_retrieved_document_ids"] == [ALLOWED] for finding in findings
+    )
+
+
+@pytest.mark.parametrize("json_output", [False, True])
+@pytest.mark.parametrize(
+    ("retrieved", "summary", "exit_code"),
+    [
+        ([ALLOWED], ALLOWED, 0),
+        ([], "none observed", 0),
+        (None, "unknown (incomplete run)", 2),
+    ],
+)
+def test_cli_reports_permitted_retrieval(
+    monkeypatch, json_output, retrieved, summary, exit_code
+):
+    def recorded_retrieval(self, user, matters, prompt):
+        return TargetResult(
+            response_text="PRIVATE_RESPONSE_BODY", retrieved_document_ids=retrieved
+        )
+
+    monkeypatch.setattr(SecureMockTarget, "retrieve", recorded_retrieval)
+    arguments = ["run", "--target", "secure"]
+    if json_output:
+        arguments.append("--json")
+    result = CliRunner().invoke(app, arguments)
+
+    assert result.exit_code == exit_code, result.output
+    assert "PRIVATE_RESPONSE_BODY" not in result.output
+    if json_output:
+        assert json.loads(result.output)[0]["permitted_retrieved_document_ids"] == retrieved
+    else:
+        assert f"Permitted retrieval: {summary}" in result.output
 
 
 def test_cli_accepts_a_scenario_file(scenario, tmp_path):

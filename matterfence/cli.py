@@ -39,6 +39,10 @@ class TargetSelection(str, Enum):
 
 def _print_finding(finding: Finding) -> None:
     """Render identifying evidence, never raw target responses or documents."""
+    if finding.permitted_retrieved_document_ids is None:
+        permitted = "unknown (incomplete run)"
+    else:
+        permitted = ", ".join(finding.permitted_retrieved_document_ids) or "none observed"
     console.print(
         f"\n{finding.scenario_id} v{finding.scenario_version} | "
         f"{finding.target_name}",
@@ -47,7 +51,8 @@ def _print_finding(finding: Finding) -> None:
     console.print(
         f"User: {finding.actor.name} ({finding.actor.id})\n"
         f"Authorized matters: {', '.join(finding.authorized_matter_ids)}\n"
-        f"Expected: {finding.expected_behavior}",
+        f"Expected: {finding.expected_behavior}\n"
+        f"Permitted retrieval: {permitted}",
         markup=False,
     )
     for resource in finding.prohibited_resources:

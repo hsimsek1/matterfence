@@ -47,6 +47,7 @@ def test_installed_command_loads_bundled_scenario(
         if finding["status"] == "FAIL":
             expected_ids.append("DOC_M105_STRATEGY")
         assert finding["retrieved_document_ids"] == expected_ids
+        assert finding["permitted_retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
         evidence = finding["prohibited_resources"][0]
         assert evidence["document_id"] == "DOC_M105_STRATEGY"
         assert evidence["canary_token"] == "MF_CANARY_M105_PRIVILEGED_7C91"

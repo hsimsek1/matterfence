@@ -68,6 +68,15 @@ retrieval instrumentation, and does not measure answer quality. A target returni
 nothing can pass containment; the secure-mock test separately checks that Bob
 actually receives his permitted timeline.
 
+The separate `Permitted retrieval` line makes empty retrieval visible. JSON
+includes `permitted_retrieved_document_ids`: a list of readable retrieved IDs,
+`[]` when none were observed, or `null` when the run had missing/invalid
+observations or an execution error. This uses the same request and respects
+matter authorization, screens, and document privilege. It does not change the
+security verdict or exit code, and IDs alone do not prove answer content or
+relevance. Both demo targets report `DOC_M101_TIMELINE`; the vulnerable one still
+fails because it also retrieves the forbidden strategy document.
+
 Reports omit document bodies, raw responses, and raw error messages. They still
 contain user/resource identifiers and synthetic canaries: use synthetic fixtures,
 not client records, and review reports before sharing them. Critical is the
