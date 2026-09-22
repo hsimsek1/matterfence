@@ -128,6 +128,13 @@ provide production authentication. Read the
 [reference app walkthrough](docs/reference-app.md) for the request, permission
 checks, response, and tests.
 
+To use your own synthetic version 1 scenario, start the reference app with
+`--scenario "my-scenario.json"` and pass the same file to
+`matterfence run "my-scenario.json" --target http --endpoint ... --json`.
+The file is validated and loaded before the server starts; restart after edits.
+Use only invented data, never client records. See the
+[custom fixture walkthrough](docs/reference-app.md#use-a-custom-synthetic-fixture).
+
 In PowerShell, you can also start the demo without activating the environment:
 
 ```powershell
