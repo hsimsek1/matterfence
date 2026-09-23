@@ -24,10 +24,11 @@ def test_installed_command_loads_bundled_scenario(
     environment = os.environ.copy()
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)
+    report = tmp_path / "installed evidence report.html"
 
     # No MatterFence imports: the installed command must find its own code/data.
     result = subprocess.run(
-        [str(command), "run", "--json", *selection],
+        [str(command), "run", "--json", "--report", str(report), *selection],
         cwd=tmp_path,
         env=environment,
         capture_output=True,
@@ -37,9 +38,15 @@ def test_installed_command_loads_bundled_scenario(
     )
 
     assert result.returncode == exit_code, result.stdout + result.stderr
+    assert result.stderr.strip() == "HTML report saved."
+    html = report.read_text(encoding="utf-8")
+    assert "<html" in html
+    assert "MatterFence" in html
     findings = json.loads(result.stdout)
     assert [finding["status"] for finding in findings] == statuses
     for finding in findings:
+        assert finding["target_name"] in html
+        assert finding["status"] in html
         assert finding["scenario_id"] == "MF-AUTH-001"
         assert finding["actor"]["id"] == "USR_BOB"
         assert finding["authorized_matter_ids"] == ["M101"]

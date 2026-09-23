@@ -45,6 +45,25 @@ the canary, and whether forbidden retrieval or canary disclosure was observed.
 The vulnerable result is an intentional demonstration of a security failure,
 not a broken installation. Accordingly, this default command exits with code 1.
 
+### Open a visual evidence report
+
+```sh
+matterfence run --report matterfence-report.html
+```
+
+Double-click `matterfence-report.html` to open the report in your browser. No
+server, account, API key, or internet connection is needed to view it. On a wide
+screen the vulnerable and secure results appear side by side, with the actor,
+access boundary, retrieval IDs, forbidden-document evidence, and remediation.
+On a narrow screen the cards stack. Use your browser's Print command if needed.
+
+The intentional vulnerable FAIL still exits 1 even when the file was saved
+successfully. Choose a new filename for each report: existing files are never
+overwritten, and the destination folder must already exist. A write failure
+exits 2. You can combine `--report` with `--json`; stdout remains just JSON and
+report notices go to stderr. Reports contain synthetic IDs and canaries, so
+review them before sharing. See the [report walkthrough](docs/html-report.md).
+
 ## Results and automation
 
 ```sh
@@ -174,7 +193,8 @@ reference-app integration on Python 3.12.
 It also builds a wheel (the installable Python package), installs it with pytest
 in a fresh virtual environment, and tests the installed command from an empty
 temporary directory. This catches missing scenario JSON and broken command entry
-points and reference-app integration problems. These installed-package tests run
+points, missing HTML report assets, and reference-app integration problems.
+These installed-package tests run
 in the regular suite too; the fresh CI environment verifies the wheel
 independently of the source checkout.
 
