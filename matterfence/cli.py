@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Annotated
 
@@ -211,8 +212,8 @@ def scan():
 
 @app.command("version")
 def version():
-    """Display the current MatterFence version."""
-    console.print("[bold]MatterFence[/bold] version: 0.2.0 (Ethical Walls)")
+    """Display the installed MatterFence distribution's version."""
+    typer.echo(f"MatterFence version: {package_version('matterfence')}")
 
 
 if __name__ == "__main__":
