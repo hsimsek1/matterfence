@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>MatterFence | Authorization evidence</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #152e35;
+      --muted: #52666b;
+      --line: #d8e0dc;
+      --paper: #f4f5ef;
+      --green: #19604c;
+      --red: #9d302c;
+      --amber: #785200;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .masthead { background: var(--ink); color: #fff; }
+    .masthead-inner, main, footer { width: min(1240px, 100% - 64px); margin: auto; }
+    .masthead-inner { display: flex; justify-content: space-between; gap: 16px; padding: 22px 0; }
+    .brand { font-size: 21px; font-weight: 750; letter-spacing: -.6px; }
+    .brand span { color: #a6d3ba; }
+    .edition { color: #d7e3df; align-self: center; font-size: 12px; letter-spacing: .08em; }
+    .hero { display: grid; grid-template-columns: 1.3fr 1fr; gap: 64px; padding: 56px 0 40px; }
+    .eyebrow, .label { font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+    .eyebrow { color: var(--green); margin: 0 0 14px; }
+    h1 { font-size: clamp(32px, 4vw, 50px); line-height: 1.1; letter-spacing: -1.8px; margin: 0 0 20px; }
+    .intro { color: var(--muted); font-size: 17px; max-width: 540px; margin: 0; }
+    .summary { border-top: 2px solid var(--ink); align-self: end; padding-top: 16px; }
+    .summary-title { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .summary-title p { margin: 0; }
+    .summary-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .summary-counts div { border-left: 1px solid var(--line); padding-left: 14px; }
+    .summary-counts strong { display: block; font-size: 38px; line-height: 1.2; font-weight: 650; }
+    .summary-counts span { font-size: 12px; color: var(--muted); }
+    .fail-count { color: var(--red); }
+    .pass-count { color: var(--green); }
+    .error-count { color: var(--amber); }
+    .scope-note { border: 1px solid var(--line); padding: 16px 20px; margin-bottom: 28px; color: var(--muted); }
+    .scope-note strong { color: var(--ink); }
+    .findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 24px; align-items: start; }
+    .finding { background: #fff; border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 4px; min-width: 0; overflow-wrap: anywhere; }
+    .fail { --accent: var(--red); --tint: #fcf0ed; }
+    .pass { --accent: var(--green); --tint: #eef6f0; }
+    .error { --accent: var(--amber); --tint: #fcf5e6; }
+    .finding-header { padding: 26px 28px 22px; background: var(--tint); }
+    .badge { display: inline-block; background: var(--accent); color: white; padding: 3px 12px; border-radius: 3px; font-size: 12px; font-weight: 750; letter-spacing: .08em; }
+    .scenario { margin: 18px 0 4px; font-size: 12px; font-weight: 650; }
+    .scenario span { color: var(--muted); font-weight: 400; }
+    h2 { margin: 0; font-size: 25px; line-height: 1.25; letter-spacing: -.6px; }
+    .meaning { color: var(--accent); margin: 10px 0 0; font-size: 14px; }
+    .finding-body { padding: 0 28px; }
+    section { padding: 24px 0; border-top: 1px solid var(--line); }
+    section:first-child { border-top: none; }
+    h3 { font-size: 15px; margin: 0 0 18px; letter-spacing: -.1px; }
+    h3 span { color: var(--muted); font-size: 11px; margin-right: 10px; font-weight: 500; }
+    p { margin: 8px 0 14px; }
+    .label { color: var(--muted); margin: 16px 0 6px; }
+    .context, .evidence { margin: 0; }
+    .context > div, .evidence > div { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; padding: 7px 0; }
+    dt { color: var(--muted); font-size: 13px; }
+    dd { margin: 0; }
+    code { font: 12px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
+    .context dd code { display: block; }
+    .ids { margin: 0; padding-left: 18px; }
+    .ids li::marker { color: #81978c; }
+    .retrieval-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .retrieval-grid .label { margin-top: 0; }
+    .resource { background: #f7f8f5; border: 1px solid var(--line); border-radius: 3px; padding: 18px; margin-top: 12px; }
+    h4 { margin: 0; font-size: 16px; }
+    .resource-id { margin: 2px 0 14px; color: var(--muted); }
+    .evidence > div { border-top: 1px solid var(--line); }
+    .evidence dd { font-weight: 650; font-size: 13px; }
+    .canary { display: block; }
+    .note, .muted { color: var(--muted); font-size: 13px; }
+    .note { margin-bottom: 0; }
+    .metadata { margin-top: 18px; }
+    .limitations { margin: 32px 0 40px; border-top: 2px solid var(--ink); padding-top: 22px; }
+    .limitations h2 { font-size: 21px; }
+    .limits-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+    .limits-grid p { color: var(--muted); font-size: 13px; }
+    .limits-grid strong { display: block; color: var(--ink); margin-bottom: 6px; }
+    footer { border-top: 1px solid var(--line); padding: 20px 0 32px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 720px) {
+      .masthead-inner, main, footer { width: calc(100% - 32px); }
+      .masthead-inner { flex-wrap: wrap; }
+      .edition { font-size: 10px; }
+      .hero { grid-template-columns: 1fr; gap: 28px; padding: 32px 0 28px; }
+      .finding-header { padding: 22px 20px; }
+      .finding-body { padding: 0 20px; }
+      .retrieval-grid, .limits-grid { grid-template-columns: 1fr; gap: 12px; }
+      .summary-counts div { padding-left: 10px; }
+      .resource { padding: 14px; }
+    }
+    @media print {
+      body { background: white; font-size: 10pt; }
+      .masthead { background: white; color: var(--ink); }
+      .edition, .brand span { color: var(--ink); }
+      .masthead-inner, main, footer { width: 100%; }
+      .hero { padding: 20px 0; gap: 24px; }
+      h1 { font-size: 28pt; }
+      .findings { display: block; }
+      .finding { margin-bottom: 24px; }
+      .finding-header, .resource, .limits-grid { break-inside: avoid; }
+      h3 { break-after: avoid; }
+      .badge { color: var(--ink); background: none; border: 1px solid currentColor; }
+    }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <div class="brand">Matter<span>Fence</span></div>
+      <div class="edition">SECURITY EVALUATION / OFFLINE REPORT</div>
+    </div>
+  </header>
+  <main>
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Synthetic authorization evaluation</p>
+        <h1>Access boundaries.<br>Visible evidence.</h1>
+        <p class="intro">Can an application retrieve or disclose a document
+          its user is forbidden to access? These findings show what was observed.</p>
+      </div>
+      <aside class="summary" aria-label="Finding counts">
+        <div class="summary-title"><p class="eyebrow">This report</p><p>Target runs: $finding_count</p></div>
+        <div class="summary-counts">
+          <div><strong class="fail-count">$fail_count</strong><span>FAIL / violation</span></div>
+          <div><strong class="pass-count">$pass_count</strong><span>PASS / no violation observed</span></div>
+          <div><strong class="error-count">$error_count</strong><span>ERROR / incomplete</span></div>
+        </div>
+      </aside>
+    </div>
+    <div class="scope-note"><strong>Read the evidence, not just the badge.</strong>
+      Mock targets are deterministic demonstrations, not LLM tests.
+      HTTP findings describe the connected application's reported observations.
+      A known violation remains FAIL even when other evidence is incomplete.</div>
+    <div class="findings">$findings</div>
+    <aside class="limitations" aria-label="Interpretation limits">
+      <h2>What this report does not prove</h2>
+      <div class="limits-grid">
+        <p><strong>No certification.</strong>PASS applies only to this observed run;
+          it is not a security guarantee or legal compliance determination.
+          Severity describes the scenario's assigned impact if violated.</p>
+        <p><strong>Observation has limits.</strong>Exact canaries can miss paraphrased
+          leaks. Retrieval IDs rely on honest, complete instrumentation.
+          Permitted IDs do not establish answer quality or relevance.</p>
+        <p><strong>Review before sharing.</strong>Raw document bodies, target responses,
+          and raw errors are omitted. Identifiers and canaries remain.
+          Use invented fixtures, never client records.</p>
+      </div>
+    </aside>
+  </main>
+  <footer>MatterFence &middot; Adversarial security testing for legal AI
+    &middot; Standalone HTML, no external assets or scripts.</footer>
+</body>
+</html>

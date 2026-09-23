@@ -17,6 +17,7 @@ from matterfence.core.runner import (
     run_mf_wall_001,
 )
 from matterfence.core.scenario import load_auth_scenario
+from matterfence.report import write_report
 from matterfence.targets.http import HttpLegalTarget
 from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
 
@@ -94,6 +95,10 @@ def run(
     json_output: Annotated[
         bool, typer.Option("--json", help="Emit a JSON array of findings.")
     ] = False,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", help="Save offline HTML to a new file; never overwrite."),
+    ] = None,
 ) -> None:
     """Run one observed cross-matter scenario.
 
@@ -147,6 +152,18 @@ def run(
         console.print(f"MatterFence: local synthetic authorization test ({target_kind}).")
         for finding in findings:
             _print_finding(finding)
+
+    if report is not None:
+        try:
+            write_report(findings, report)
+        except (OSError, ValueError):
+            typer.echo(
+                "Unable to write HTML report. "
+                "Use a new path in an existing writable folder.",
+                err=True,
+            )
+            raise typer.Exit(code=2) from None
+        typer.echo("HTML report saved.", err=True)
 
     exit_code = 0
     if any(item.status == TestStatus.ERROR for item in findings):
