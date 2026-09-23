@@ -16,6 +16,18 @@ you can also double-click it. No reference-app server is required for the mock
 comparison. The deliberate vulnerable FAIL gives exit code 1, not an installation
 or report error.
 
+The repository includes the same deterministic output as
+[`docs/example-report.html`](example-report.html). `tests/test_showcase.py`
+recomputes the two findings and compares the checked-in file with
+`render_report(findings)`, so the public example cannot silently drift from the
+benchmark or its PASS/FAIL evidence.
+
+`docs/example-report.png` is a browser screenshot of that HTML, used as the README
+preview. The test takes no arguments and returns normally when the expected
+FAIL/PASS findings render to the checked-in HTML. If the fixture or report changes,
+regenerate the HTML from the bundled scenario, rerun the test, and capture a new
+screenshot. The screenshot is checked visually, not compared pixel by pixel.
+
 For one target, a custom scenario, or machine-readable output:
 
 ```sh
