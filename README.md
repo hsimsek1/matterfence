@@ -9,6 +9,12 @@ can also test a separately running application that implements the documented
 query contract. MatterFence does not perform semantic search, include an LLM,
 or certify security or legal compliance.
 
+![MatterFence report showing one vulnerable FAIL and one secure PASS](docs/example-report.png)
+
+Actual output from the bundled synthetic scenario. Download the
+[example HTML report](docs/example-report.html) to explore the full evidence in
+your browser; GitHub shows the HTML source.
+
 ## Install and run
 
 Requires Python 3.12 or newer. From a fresh clone:
@@ -26,11 +32,15 @@ Activate the environment with `.venv\Scripts\Activate.ps1` in PowerShell, or
 python -m pip install -e ".[dev]"
 ```
 
-Run the complete example with one command:
+Run the synthetic example and save an offline HTML report:
 
 ```sh
-matterfence run
+matterfence run --report matterfence-report.html
 ```
+
+Double-click `matterfence-report.html` to open it in your browser. The intentional
+vulnerable FAIL gives exit code 1 even when the report was saved successfully.
+Use a new filename for each run; existing reports are never overwritten.
 
 This runs **MF-AUTH-001: Cross-Matter Retrieval** against both mocks:
 
@@ -45,21 +55,20 @@ the canary, and whether forbidden retrieval or canary disclosure was observed.
 The vulnerable result is an intentional demonstration of a security failure,
 not a broken installation. Accordingly, this default command exits with code 1.
 
-### Open a visual evidence report
+### View the evidence
 
-```sh
-matterfence run --report matterfence-report.html
-```
-
-Double-click `matterfence-report.html` to open the report in your browser. No
-server, account, API key, or internet connection is needed to view it. On a wide
-screen the vulnerable and secure results appear side by side, with the actor,
+No server, account, API key, or internet connection is needed to view the report.
+On a wide screen the vulnerable and secure results appear side by side, with the actor,
 access boundary, retrieval IDs, forbidden-document evidence, and remediation.
 On a narrow screen the cards stack. Use your browser's Print command if needed.
 
-The intentional vulnerable FAIL still exits 1 even when the file was saved
-successfully. Choose a new filename for each report: existing files are never
-overwritten, and the destination folder must already exist. A write failure
+To preview the output without installing, download the
+[synthetic example report](docs/example-report.html) and open it in your browser.
+GitHub displays its HTML source; use the file's download button to save it.
+The example contains the same reproducible FAIL/PASS comparison, with no client
+data, scripts, or external assets.
+
+The destination folder must already exist. A write failure
 exits 2. You can combine `--report` with `--json`; stdout remains just JSON and
 report notices go to stderr. Reports contain synthetic IDs and canaries, so
 review them before sharing. See the [report walkthrough](docs/html-report.md).
@@ -182,6 +191,11 @@ PDFs. Privileged access is an explicit user-ID policy; a role label such as
 Partner or Paralegal does not itself grant or deny access.
 
 ## Development
+
+Use branches named for the work, such as `feat/retrieval-case-study`,
+`fix/version-output`, or `docs/report-showcase`. Commit messages and PR titles
+should describe the change, without tool-name prefixes or promotional footers.
+Keep each issue small enough to explain and verify with pytest and Ruff.
 
 `matterfence version` prints the installed package's version, not a separate
 hardcoded label. The command takes no arguments, asks Python's package metadata
