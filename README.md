@@ -183,6 +183,13 @@ Partner or Paralegal does not itself grant or deny access.
 
 ## Development
 
+`matterfence version` prints the installed package's version, not a separate
+hardcoded label. The command takes no arguments, asks Python's package metadata
+for the `matterfence` distribution, and prints one line. `pyproject.toml` defines
+the version when building/installing; reinstall after changing it in an editable
+checkout. Tests substitute metadata versions and run the installed command outside
+the repository to verify both the lookup and packaged behavior.
+
 ```sh
 python -m pytest -q
 python -m ruff check .

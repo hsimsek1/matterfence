@@ -2,9 +2,32 @@ import json
 import os
 import subprocess
 import sysconfig
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+
+
+def test_installed_command_reports_installed_version(tmp_path):
+    command_name = "matterfence.exe" if os.name == "nt" else "matterfence"
+    command = Path(sysconfig.get_path("scripts")) / command_name
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+
+    result = subprocess.run(
+        [str(command), "version"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == f"MatterFence version: {version('matterfence')}\n"
+    assert result.stderr == ""
 
 
 @pytest.mark.parametrize(
