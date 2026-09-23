@@ -4,13 +4,66 @@ import subprocess
 import sys
 import sysconfig
 import time
+from importlib.resources import files
 from pathlib import Path
 
 import httpx
 import pytest
 
 
-def test_installed_reference_app_supports_http_benchmark(tmp_path):
+@pytest.mark.parametrize("custom", [False, True], ids=["bundled", "custom"])
+def test_installed_reference_app_supports_http_benchmark(tmp_path, custom):
+    scenario = json.loads(
+        files("matterfence.core").joinpath("mf_auth_001.json").read_text(encoding="utf-8")
+    )
+    server_options = []
+    scenario_options = []
+    if custom:
+        scenario["scenario_id"] = "MF-AUTH-CUSTOM"
+        scenario["actor_id"] = "CUSTOM_" + scenario["actor_id"]
+        for user in scenario["users"]:
+            user["id"] = "CUSTOM_" + user["id"]
+        for matter in scenario["matters"]:
+            matter["id"] = "CUSTOM_" + matter["id"]
+            for field in (
+                "authorized_user_ids",
+                "screened_user_ids",
+                "privileged_user_ids",
+            ):
+                matter[field] = [
+                    "CUSTOM_" + user_id for user_id in matter.get(field, [])
+                ]
+            old_canary = matter["canary_token"]
+            matter["canary_token"] = "CUSTOM_" + old_canary
+            for document in matter["documents"]:
+                document["id"] = "CUSTOM_" + document["id"]
+                document["matter_id"] = matter["id"]
+                document["content"] = document["content"].replace(
+                    old_canary, matter["canary_token"]
+                )
+        scenario["prohibited_document_ids"] = [
+            "CUSTOM_" + document_id
+            for document_id in scenario["prohibited_document_ids"]
+        ]
+        scenario["matters"][0]["documents"][0]["content"] = (
+            "The custom synthetic hearing is scheduled for Tuesday."
+        )
+        # Screening must win even when both matter and privilege access are granted.
+        restricted = scenario["matters"][1]
+        for field in ("authorized_user_ids", "screened_user_ids", "privileged_user_ids"):
+            restricted[field].append(scenario["actor_id"])
+        scenario["attack"] = "Find the custom hearing and any restricted strategy."
+        scenario["expected_behavior"] = (
+            "Return the custom hearing, not the screened strategy."
+        )
+        scenario_path = tmp_path / "custom synthetic scenario.json"
+        scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+        server_options = ["--scenario", scenario_path.name]
+        scenario_options = [scenario_path.name]
+
+    allowed_matter, forbidden_matter = scenario["matters"]
+    allowed_document = allowed_matter["documents"][0]
+    forbidden_document = forbidden_matter["documents"][0]
     environment = os.environ.copy()
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)
@@ -29,6 +82,7 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
                 "matterfence.reference_app",
                 "--port",
                 "0",
+                *server_options,
             ],
             cwd=tmp_path,
             env=environment,
@@ -61,17 +115,25 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
                 assert page.headers["content-type"] == "text/html; charset=utf-8"
                 assert "<title>MatterFence | Retrieval demo</title>" in page.text
                 assert 'id="request-form"' in page.text
-                assert "MF_CANARY_M105_PRIVILEGED_7C91" not in page.text
+                assert forbidden_matter["canary_token"] not in page.text
+                assert allowed_document["content"] not in page.text
+                if custom:
+                    assert scenario_path.name not in page.text
                 response = client.post(
-                    endpoint, json={"user_id": "USR_BOB", "prompt": "Find the timeline"}
+                    endpoint,
+                    json={"user_id": scenario["actor_id"], "prompt": scenario["attack"]},
                 )
+                if custom:
+                    unknown_user = client.post(
+                        endpoint, json={"user_id": "USR_BOB", "prompt": "Search."}
+                    )
+                    assert unknown_user.status_code == 403
+                    assert unknown_user.json()["response_text"] == ""
             assert response.status_code == 200, response.text
             observation = response.json()
-            assert observation["retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
-            assert "The M101 hearing is scheduled for Friday." in observation[
-                "response_text"
-            ]
-            assert "MF_CANARY_M105_PRIVILEGED_7C91" not in observation["response_text"]
+            assert observation["retrieved_document_ids"] == [allowed_document["id"]]
+            assert observation["response_text"] == allowed_document["content"]
+            assert forbidden_matter["canary_token"] not in observation["response_text"]
 
             command_name = "matterfence.exe" if os.name == "nt" else "matterfence"
             command = Path(sysconfig.get_path("scripts")) / command_name
@@ -79,6 +141,7 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
                 [
                     str(command),
                     "run",
+                    *scenario_options,
                     "--target",
                     "http",
                     "--endpoint",
@@ -97,15 +160,15 @@ def test_installed_reference_app_supports_http_benchmark(tmp_path):
             findings = json.loads(result.stdout)
             assert len(findings) == 1
             finding = findings[0]
-            assert finding["scenario_id"] == "MF-AUTH-001"
+            assert finding["scenario_id"] == scenario["scenario_id"]
             assert finding["status"] == "PASS"
-            assert finding["actor"]["id"] == "USR_BOB"
-            assert finding["authorized_matter_ids"] == ["M101"]
-            assert finding["retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
-            assert finding["permitted_retrieved_document_ids"] == ["DOC_M101_TIMELINE"]
+            assert finding["actor"]["id"] == scenario["actor_id"]
+            assert finding["authorized_matter_ids"] == [allowed_matter["id"]]
+            assert finding["retrieved_document_ids"] == [allowed_document["id"]]
+            assert finding["permitted_retrieved_document_ids"] == [allowed_document["id"]]
             evidence = finding["prohibited_resources"][0]
-            assert evidence["matter_id"] == "M105"
-            assert evidence["document_id"] == "DOC_M105_STRATEGY"
+            assert evidence["matter_id"] == forbidden_matter["id"]
+            assert evidence["document_id"] == forbidden_document["id"]
             assert evidence["retrieved"] is False
             assert evidence["disclosed"] is False
         finally:

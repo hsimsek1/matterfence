@@ -153,6 +153,8 @@ def test_browser_page_is_available_without_disclosing_documents(
     assert 'id="request-form"' in home.text
     assert 'name="user_id"' in home.text
     assert 'name="prompt"' in home.text
+    assert "For a custom scenario, enter a user ID from that file." in home.text
+    assert "the same JSON file path (in quotes)" in home.text
     for matter in scenario.matters:
         assert matter.canary_token not in home.text
         for document in matter.documents:
@@ -297,3 +299,55 @@ def test_cli_startup_errors_are_safe(monkeypatch, error_type):
     assert result.exit_code == 2
     assert "Unable to start reference app" in result.output
     assert "PRIVATE_STARTUP_DETAILS" not in result.output
+
+
+@pytest.mark.parametrize(
+    "file_kind", ["missing", "directory", "invalid_json", "invalid_utf8", "invalid_schema"]
+)
+def test_cli_rejects_bad_scenario_before_binding(tmp_path, monkeypatch, file_kind):
+    path = tmp_path / "PRIVATE_SCENARIO.json"
+    if file_kind == "directory":
+        path.mkdir()
+    elif file_kind == "invalid_json":
+        path.write_text("PRIVATE_CONTENT", encoding="utf-8")
+    elif file_kind == "invalid_utf8":
+        path.write_bytes(b"\xffPRIVATE_CONTENT")
+    elif file_kind == "invalid_schema":
+        path.write_text('{"description": "PRIVATE_CONTENT"}', encoding="utf-8")
+
+    def unexpected_bind(*args, **kwargs):
+        pytest.fail("Invalid scenarios must be rejected before binding a socket")
+
+    monkeypatch.setattr(reference_app, "create_server", unexpected_bind)
+    result = CliRunner().invoke(
+        reference_app.app, ["--scenario", str(path), "--port", "0"]
+    )
+
+    assert result.exit_code == 2
+    assert "Unable to start reference app" in result.output
+    for private in (
+        str(path), "PRIVATE_SCENARIO", "PRIVATE_CONTENT", "Traceback", "http://"
+    ):
+        assert private not in result.output
+
+
+def test_cli_unreadable_scenario_is_safe(tmp_path, monkeypatch):
+    path = tmp_path / "PRIVATE_SCENARIO.json"
+
+    def denied_read(selected_path):
+        assert selected_path == path
+        raise PermissionError("PRIVATE_READ_DETAILS")
+
+    def unexpected_bind(*args, **kwargs):
+        pytest.fail("Unreadable scenarios must be rejected before binding a socket")
+
+    monkeypatch.setattr(reference_app, "load_auth_scenario", denied_read)
+    monkeypatch.setattr(reference_app, "create_server", unexpected_bind)
+    result = CliRunner().invoke(reference_app.app, ["--scenario", str(path)])
+
+    assert result.exit_code == 2
+    assert "Unable to start reference app" in result.output
+    for private in (
+        str(path), "PRIVATE_SCENARIO", "PRIVATE_READ_DETAILS", "Traceback", "http://"
+    ):
+        assert private not in result.output

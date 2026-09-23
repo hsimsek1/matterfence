@@ -3,7 +3,7 @@
 The reference application is a tiny local service that makes the HTTP target
 usable immediately. It is an integration example, not a legal-AI product. It
 has no LLM, semantic search, database, uploads, or production authentication.
-Use only the bundled synthetic records.
+Use only synthetic records: the bundled fixture or an invented custom fixture.
 
 ## Run it
 
@@ -47,6 +47,53 @@ The page displays the raw retrieval response. Use the CLI for the benchmark
 finding; the page shows a command with its actual port already filled in. If
 your second PowerShell terminal is not activated, replace `matterfence` in that
 command with `.\.venv\Scripts\matterfence.exe`.
+
+## Use a custom synthetic fixture
+
+Copy [the bundled scenario](../matterfence/core/mf_auth_001.json) to
+`my-scenario.json` and edit the copy using invented users, documents, and
+permissions. Keep the existing version 1 contract: IDs must agree, there must be
+readable and prohibited documents, and forbidden documents must contain their
+matter's canary. Validation checks consistency, not whether data is synthetic;
+never use client records.
+
+Start the app and evaluator with the **same file**:
+
+```sh
+# Terminal 1
+python -m matterfence.reference_app --scenario "my-scenario.json" --port 0
+
+# Terminal 2: use the endpoint printed by Terminal 1
+matterfence run "my-scenario.json" --target http --endpoint http://127.0.0.1:PORT/retrieve --json
+```
+
+Relative paths are resolved from each terminal's current directory. Quotes allow
+spaces in filenames. Omit `--scenario` to keep the bundled behavior. The server
+loads once at startup, so stop and restart it after editing the file. Missing,
+unreadable, or invalid files exit with code 2 and a generic error before binding
+the socket or printing an endpoint. Paths and file contents are not echoed.
+
+In the browser, enter a user ID from your file. The form defaults and displayed
+command are bundled examples; insert your quoted scenario path immediately after
+`matterfence run` when copying the command. No custom path, document, or canary is
+embedded in the page. Requests still send only the user ID and prompt, and the
+app remains loopback-only with no authentication.
+
+### Inputs, outputs, and proof
+
+`serve(port, scenario_file=None)` receives the port and optional path from Typer.
+`Path | None` means either a filesystem path or no selection. Typer exposes the
+parameter as `--scenario`; `None` preserves the default. The function passes that
+path to `load_auth_scenario`, which returns the validated scenario. Its users and
+matters become the server's store. `serve` returns no data object: it prints the
+bound endpoint, serves until interrupted, and closes the server on exit.
+
+The startup tests replace `create_server` with a function that fails if called,
+then supply bad files; this proves rejection happens before binding. The
+installed integration runs both bundled and custom cases. The custom case uses
+different IDs, body text, and canaries, plus a screen overriding authorization.
+It checks actual HTTP content and IDs, rejection of the old bundled user, and
+CLI findings using that same file. This catches silently loading the wrong store.
 
 ## What the application accepts
 
@@ -104,8 +151,8 @@ shows the application's boundary rather than reusing a test helper.
 
 `create_server(users, matters, port)` binds a `ThreadingHTTPServer` to
 `127.0.0.1` and returns it without starting the serving loop. The `serve`
-command loads the packaged scenario, announces the bound URL, and calls
-`serve_forever`; Ctrl+C closes the server context. Each request uses a five-second
+command loads the selected scenario (packaged by default), announces the bound
+URL, and calls `serve_forever`; Ctrl+C closes the server context. Each request uses a five-second
 socket timeout, HTTP/1.0 connection closing, a 64 KiB request limit, and generic
 JSON errors. These limits keep the example predictable; they are not a complete
 production server hardening policy.

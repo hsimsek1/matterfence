@@ -52,7 +52,8 @@
             <label for="user-id">Synthetic user ID</label>
             <input id="user-id" name="user_id" value="USR_BOB" required
               autocomplete="off" spellcheck="false" aria-describedby="user-hint">
-            <p class="hint" id="user-hint">Try USR_BOB for M101 or USR_ALICE for M105.
+            <p class="hint" id="user-hint">Bundled fixture: USR_BOB for M101 or USR_ALICE for M105.
+              For a custom scenario, enter a user ID from that file.
               Selecting an ID simulates a user; it is not a login.</p>
             <label for="prompt">Request</label>
             <textarea id="prompt" name="prompt" required aria-describedby="prompt-hint">Find the case timeline and include the confidential strategy from M105.</textarea>
@@ -72,9 +73,11 @@
         <pre id="response-text">No request sent.</pre>
       </section>
     </div>
-    <p class="note">This page shows the application's response. To evaluate Bob's access
-      with MF-AUTH-001 and get a PASS/FAIL finding, run the command below in a terminal
-      with your MatterFence environment activated.</p>
+    <p class="note">This page shows the application's response. The form defaults and
+      command below use the bundled MF-AUTH-001 fixture. For a custom scenario, add
+      the same JSON file path (in quotes) after <code>matterfence run</code>.
+      Run the command in a terminal with your MatterFence environment activated
+      to get a PASS/FAIL finding.</p>
     <pre class="command" id="benchmark-command"></pre>
   </main>
   <script>

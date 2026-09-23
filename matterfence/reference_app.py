@@ -2,6 +2,7 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -149,10 +150,16 @@ def serve(
             min=0, max=65535, help="Local port; 0 chooses an available port."
         ),
     ] = 8000,
+    scenario_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--scenario", help="Synthetic scenario JSON; defaults to bundled MF-AUTH-001."
+        ),
+    ] = None,
 ) -> None:
-    """Serve the bundled synthetic fixture on loopback only. Stop with Ctrl+C."""
+    """Serve a synthetic fixture on loopback only. Stop with Ctrl+C."""
     try:
-        scenario = load_auth_scenario()
+        scenario = load_auth_scenario(scenario_file)
         with create_server(scenario.users, scenario.matters, port) as server:
             print(f"http://127.0.0.1:{server.server_port}/retrieve", flush=True)
             typer.echo(
