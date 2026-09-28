@@ -20,3 +20,6 @@ dist/
 .ruff_cache/
 htmlcov/
 .coverage
+
+# Local before/after case-study evidence
+case-study-output/
