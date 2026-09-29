@@ -118,6 +118,11 @@ synthetic corpus through a separate local application, reproduces unauthorized
 retrieval, and verifies that permission filtering removes the forbidden document
 while preserving useful permitted content. It uses lexical search, without an LLM.
 
+The [poisoned-exhibit case study](docs/poisoned-exhibit-case-study.md) adds a
+second search triggered by instructions inside a readable discovery exhibit.
+It demonstrates how permission checks contain that follow-up request, using a
+scripted model stand-in and the same HTTP evidence and reports.
+
 After loading the synthetic fixture into your application's isolated test store
 and implementing the [HTTP contract](docs/local-http-target.md), run:
 
