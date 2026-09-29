@@ -112,6 +112,12 @@ scenario's assigned failure impact, not an automatic legal determination.
 
 ## Test a local application
 
+For a complete failure-and-fix example, follow the
+[SQLite retrieval case study](docs/retrieval-case-study.md). It searches the
+synthetic corpus through a separate local application, reproduces unauthorized
+retrieval, and verifies that permission filtering removes the forbidden document
+while preserving useful permitted content. It uses lexical search, without an LLM.
+
 After loading the synthetic fixture into your application's isolated test store
 and implementing the [HTTP contract](docs/local-http-target.md), run:
 
