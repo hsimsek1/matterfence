@@ -13,6 +13,10 @@ example, not a third-party legal-AI product or a production security assessment.
 
 ## Reproduce the case
 
+For an automatic comparison without manual ports or a second terminal, use the
+[one-command demo](case-study-demo.md). The steps below retain the separately
+running server workflow for inspecting the HTTP integration yourself.
+
 From a repository checkout, install MatterFence and activate its virtual
 environment as described in the [quickstart](../README.md#install-and-run).
 Python's SQLite must include FTS5; no extra Python dependency or model key is

@@ -112,6 +112,28 @@ scenario's assigned failure impact, not an automatic legal determination.
 
 ## Test a local application
 
+### One-command SQLite comparison
+
+From the repository root with the environment activated, run:
+
+```sh
+python -m examples.run_case_study --output-dir case-study-output/auth-demo
+```
+
+This runs vulnerable and secure SQLite search over real loopback HTTP, chooses
+ports automatically, and closes both servers. Open
+`case-study-output/auth-demo/comparison.html` for labeled, side-by-side results;
+`findings.json` holds the same evidence. Expect **FAIL / PASS and exit code 1**:
+the vulnerable failure is intentional. Every run requires a new output folder.
+
+For the poisoned exhibit, use `--case exhibit` and another output folder.
+These are synthetic, source-checkout examples with no authentication or LLM;
+the servers run on threads in the same process. See the
+[one-command walkthrough](docs/case-study-demo.md) for commands, function inputs
+and outputs, cleanup tests, and limitations.
+
+### Connect an application yourself
+
 For a complete failure-and-fix example, follow the
 [SQLite retrieval case study](docs/retrieval-case-study.md). It searches the
 synthetic corpus through a separate local application, reproduces unauthorized

@@ -54,6 +54,10 @@ the two step responses, so a document matched twice can appear twice in text.
 
 ## Reproduce it
 
+For an automatic comparison, use the [one-command demo](case-study-demo.md) with
+`--case exhibit`. It selects this fixture and workflow together and saves labeled
+vulnerable/secure evidence. The manual two-terminal workflow follows below.
+
 Use a repository checkout and the installed virtual environment from the
 [quickstart](../README.md#install-and-run). The example and its fixture ship in
 the source repository, not the wheel. No new dependency or model key is needed.
