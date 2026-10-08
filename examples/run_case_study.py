@@ -19,7 +19,11 @@ from matterfence.core.scenario import CrossMatterScenario, load_auth_scenario
 from matterfence.report import write_report
 from matterfence.targets.http import HttpLegalTarget
 
-CASES = {"authorization": FIXTURE, "exhibit": EXHIBIT_FIXTURE}
+CASES = {
+    "authorization": FIXTURE,
+    "exhibit": EXHIBIT_FIXTURE,
+    "wall": Path(__file__).with_name("ethical_wall.json"),
+}
 
 
 def _run_mode(

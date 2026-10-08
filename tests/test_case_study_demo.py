@@ -56,6 +56,7 @@ def assert_closed(resources):
     [
         ("authorization", "MF-AUTH-001", "DOC_M101_TIMELINE"),
         ("exhibit", "MF-INJECT-001-RETRIEVAL", "DOC_M101_EXHIBIT"),
+        ("wall", "MF-WALL-001-RETRIEVAL", "DOC_M101_TIMELINE"),
     ],
 )
 def test_comparison_real_http_evidence_and_cleanup(
@@ -209,7 +210,7 @@ def test_startup_and_output_errors_have_safe_messages(tmp_path, monkeypatch, cap
     assert "private error detail" not in output.err
 
 
-@pytest.mark.parametrize("case", ["authorization", "exhibit"])
+@pytest.mark.parametrize("case", ["authorization", "exhibit", "wall"])
 def test_module_command_and_rerun_protection(tmp_path, case):
     output_dir = tmp_path / "demo output"
     command = [

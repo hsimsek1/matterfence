@@ -1,7 +1,7 @@
 # One command: demonstrate the failure and the repair
 
-This slice removes setup friction from the existing SQLite case studies. It does
-not add a benchmark, change verdicts, or add model integration. Both cases run
+This helper removes setup friction from the SQLite case studies. It does
+not change verdicts or add model integration. All cases run
 through the real HTTP adapter and the existing evaluator and HTML renderer.
 
 ## Run it
@@ -20,6 +20,15 @@ For the poisoned-exhibit follow-up instead:
 python -m examples.run_case_study --case exhibit --output-dir case-study-output/exhibit-demo
 ```
 
+For an ethical screen overriding team membership and privileged access:
+
+```sh
+python -m examples.run_case_study --case wall --output-dir case-study-output/wall-demo
+```
+
+See the [ethical-wall case study](ethical-wall-case-study.md) for the permission
+setup and the separately tested authorized-colleague control.
+
 In PowerShell, if the environment is not activated, replace `python` with
 `.\.venv\Scripts\python.exe`. No second terminal, port substitution, model key,
 or separate server shutdown is needed. Python's SQLite must support FTS5.
@@ -30,7 +39,7 @@ report places `SQLite vulnerable (HTTP)` and `SQLite secure (HTTP)` side by side
 paths tell you where they were saved. Generated files under `case-study-output/`
 are ignored by Git; review any report before sharing it.
 
-Both cases should show FAIL then PASS. The permitted timeline (authorization)
+All cases should show FAIL then PASS. The permitted timeline (authorization/wall)
 or exhibit (exhibit case) should remain present in both results; the forbidden
 strategy and its canary should appear only in the vulnerable result. The normal
 security exit codes still apply: 0 for all PASS, 1 for a violation, 2 for any
@@ -69,7 +78,7 @@ The implementation is [examples/run_case_study.py](../examples/run_case_study.py
 
 The [pytest suite](../tests/test_case_study_demo.py) verifies exact permitted and
 forbidden IDs, canary evidence, fixture selection, mode labels, and JSON/HTML
-agreement through real HTTP for both cases. It observes real threads, sockets,
+agreement through real HTTP for all cases. It observes real threads, sockets,
 and stores to prove they close on success and injected startup/evaluation/write
 failures. Further tests check preserved output, safe error reporting, ERROR
 results on transport failure, and exit-code precedence. Subprocess tests run the
@@ -89,4 +98,4 @@ instruction; it does not measure how often a model obeys a payload. PASS covers
 only observed forbidden retrieval and exact canary disclosure, not answer quality
 or general security. Reports omit document bodies and raw responses but include
 synthetic identifiers and canaries. This helper lives in the source checkout,
-not the installed wheel, and accepts only the two bundled case choices.
+not the installed wheel, and accepts only the three bundled case choices.

@@ -127,6 +127,9 @@ ports automatically, and closes both servers. Open
 the vulnerable failure is intentional. Every run requires a new output folder.
 
 For the poisoned exhibit, use `--case exhibit` and another output folder.
+For an explicit ethical screen overriding team and privileged access, use
+`--case wall`. The [ethical-wall walkthrough](docs/ethical-wall-case-study.md)
+explains Bob's blocked retrieval and the authorized-colleague control tests.
 These are synthetic, source-checkout examples with no authentication or LLM;
 the servers run on threads in the same process. See the
 [one-command walkthrough](docs/case-study-demo.md) for commands, function inputs
