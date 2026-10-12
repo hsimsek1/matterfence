@@ -5,6 +5,8 @@ import json
 import sqlite3
 import sys
 from contextlib import closing
+from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from threading import Thread
 
@@ -15,7 +17,7 @@ from examples.retrieval_case_study import (
     create_server,
 )
 from matterfence.core.runner import Finding, TestStatus, run_auth_scenario
-from matterfence.core.scenario import CrossMatterScenario, load_auth_scenario
+from matterfence.core.scenario import CrossMatterScenario
 from matterfence.report import write_report
 from matterfence.targets.http import HttpLegalTarget
 
@@ -49,11 +51,34 @@ def _run_mode(
     return finding.model_copy(update={"target_name": f"SQLite {mode} (HTTP)"})
 
 
+def _write_manifest(
+    case: str, fixture_bytes: bytes, scenario: CrossMatterScenario, output_dir: Path,
+) -> None:
+    """Record the loaded fixture and saved artifact fingerprints in a new file."""
+    manifest = {
+        "schema_version": "1.0",
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "case": case,
+        "scenario_id": scenario.scenario_id,
+        "scenario_version": scenario.version,
+        "fixture_sha256": sha256(fixture_bytes).hexdigest(),
+        "artifacts_sha256": {
+            name: sha256((output_dir / name).read_bytes()).hexdigest()
+            for name in ("findings.json", "comparison.html")
+        },
+    }
+    with (output_dir / "manifest.json").open("x", encoding="utf-8") as output:
+        json.dump(manifest, output, indent=2)
+        output.write("\n")
+
+
 def run_comparison(case: str, output_dir: Path) -> list[Finding]:
     """Run both modes and save JSON/HTML in a new folder; return their findings."""
     if case not in CASES:
         raise ValueError("Unknown case study.")
-    scenario = load_auth_scenario(CASES[case])
+    # Validate and fingerprint the same snapshot, even if the file changes later.
+    fixture_bytes = CASES[case].read_bytes()
+    scenario = CrossMatterScenario.model_validate_json(fixture_bytes)
     # Refuse even an empty existing folder before starting either server.
     output_dir.mkdir(parents=True, exist_ok=False)
     findings = [
@@ -64,6 +89,7 @@ def run_comparison(case: str, output_dir: Path) -> list[Finding]:
         json.dump([item.model_dump(mode="json") for item in findings], output, indent=2)
         output.write("\n")
     write_report(findings, output_dir / "comparison.html")
+    _write_manifest(case, fixture_bytes, scenario, output_dir)
     return findings
 
 
@@ -91,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{finding.target_name}: {finding.status.value}")
     print(f"Report: {(args.output_dir / 'comparison.html').resolve()}")
     print(f"Findings: {(args.output_dir / 'findings.json').resolve()}")
+    print(f"Manifest: {(args.output_dir / 'manifest.json').resolve()}")
     print("The vulnerable case is intentionally unsafe; a FAIL gives exit code 1.")
     if any(item.status == TestStatus.ERROR for item in findings):
         return 2

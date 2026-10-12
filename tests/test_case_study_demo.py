@@ -2,6 +2,8 @@ import json
 import sqlite3
 import subprocess
 import sys
+from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -63,7 +65,9 @@ def test_comparison_real_http_evidence_and_cleanup(
     tmp_path, resources, case, scenario_id, permitted,
 ):
     output_dir = tmp_path / "nested" / case
+    started = datetime.now(UTC)
     findings = demo.run_comparison(case, output_dir)
+    finished = datetime.now(UTC)
     assert [item.status for item in findings] == [TestStatus.FAIL, TestStatus.PASS]
     assert [item.target_name for item in findings] == [
         "SQLite vulnerable (HTTP)", "SQLite secure (HTTP)",
@@ -81,11 +85,28 @@ def test_comparison_real_http_evidence_and_cleanup(
     assert [Finding.model_validate(item) for item in json.loads(raw_json)] == findings
     html = (output_dir / "comparison.html").read_text(encoding="utf-8")
     assert html == render_report(findings)
+    raw_manifest = (output_dir / "manifest.json").read_text(encoding="utf-8")
+    manifest = json.loads(raw_manifest)
+    assert started <= datetime.fromisoformat(manifest["created_at_utc"]) <= finished
+    assert manifest == {
+        "schema_version": "1.0",
+        "created_at_utc": manifest["created_at_utc"],
+        "case": case,
+        "scenario_id": scenario_id,
+        "scenario_version": "1.0",
+        "fixture_sha256": sha256(demo.CASES[case].read_bytes()).hexdigest(),
+        "artifacts_sha256": {
+            name: sha256((output_dir / name).read_bytes()).hexdigest()
+            for name in ("findings.json", "comparison.html")
+        },
+    }
+    assert str(tmp_path) not in raw_manifest
     for fixture in resources["fixtures"]:
         for matter in fixture["matters"]:
             for document in matter["documents"]:
                 assert document["content"] not in raw_json
                 assert document["content"] not in html
+                assert document["content"] not in raw_manifest
     assert len(resources["stores"]) == len(resources["servers"]) == 2
     assert resources["stores"][0] is not resources["stores"][1]
     assert resources["fixtures"][0] == resources["fixtures"][1]
@@ -142,7 +163,7 @@ def test_interruption_closes_resources(tmp_path, resources, monkeypatch, capsys)
     assert_closed(resources)
 
 
-@pytest.mark.parametrize("failure", ["bind", "start", "evaluate", "write"])
+@pytest.mark.parametrize("failure", ["bind", "start", "evaluate", "write", "manifest"])
 def test_resources_close_on_failure(tmp_path, resources, monkeypatch, failure):
     def fail(*args, **kwargs):
         raise RuntimeError("injected failure")
@@ -160,6 +181,7 @@ def test_resources_close_on_failure(tmp_path, resources, monkeypatch, failure):
         monkeypatch.setattr(demo, {
             "bind": "create_server", "evaluate": "run_auth_scenario",
             "write": "write_report",
+            "manifest": "_write_manifest",
         }[failure], fail)
     with pytest.raises(RuntimeError, match="injected failure"):
         demo.run_comparison("authorization", tmp_path / "failed")
@@ -178,6 +200,8 @@ def test_transport_errors_save_error_findings_and_exit_two(
     assert demo.main(["--output-dir", str(output_dir)]) == 2
     findings = json.loads((output_dir / "findings.json").read_text(encoding="utf-8"))
     assert [item["status"] for item in findings] == ["ERROR", "ERROR"]
+    # A complete artifact export can still describe failed evaluations.
+    assert (output_dir / "manifest.json").is_file()
     assert all(item["retrieved_document_ids"] is None for item in findings)
     assert "private transport detail" not in (output_dir / "comparison.html").read_text()
     assert "private transport detail" not in capsys.readouterr().out
@@ -227,7 +251,9 @@ def test_module_command_and_rerun_protection(tmp_path, case):
     assert "no authentication or LLM" in result.stdout
     assert ("scripted follow-up" in result.stdout) is (case == "exhibit")
     assert str((output_dir / "comparison.html").resolve()) in result.stdout
+    assert str((output_dir / "manifest.json").resolve()) in result.stdout
     saved = {path.name: path.read_bytes() for path in output_dir.iterdir()}
+    assert set(saved) == {"comparison.html", "findings.json", "manifest.json"}
     rerun = subprocess.run(
         command, cwd=Path(__file__).resolve().parents[1],
         capture_output=True, text=True, timeout=30, check=False,
@@ -235,3 +261,60 @@ def test_module_command_and_rerun_protection(tmp_path, case):
     assert rerun.returncode == 2
     assert "Choose a new output directory" in rerun.stderr
     assert {path.name: path.read_bytes() for path in output_dir.iterdir()} == saved
+
+
+def test_manifest_fingerprints_loaded_snapshot_not_later_fixture(
+    tmp_path, monkeypatch,
+):
+    fixture_bytes = demo.CASES["authorization"].read_bytes()
+    fixture = tmp_path / "fixture.json"
+    fixture.write_bytes(fixture_bytes)
+    monkeypatch.setitem(demo.CASES, "authorization", fixture)
+    original = demo._run_mode
+
+    def change_file_then_run(*args, **kwargs):
+        fixture.write_bytes(b"changed after the initial load")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(demo, "_run_mode", change_file_then_run)
+    output_dir = tmp_path / "run"
+    findings = demo.run_comparison("authorization", output_dir)
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["fixture_sha256"] == sha256(fixture_bytes).hexdigest()
+    assert manifest["fixture_sha256"] != sha256(fixture.read_bytes()).hexdigest()
+    assert [item.status for item in findings] == [TestStatus.FAIL, TestStatus.PASS]
+
+
+@pytest.mark.parametrize("failure", ["existing", "unwritable"])
+def test_manifest_write_failure_preserves_evidence_and_exits_two(
+    tmp_path, resources, monkeypatch, capsys, failure,
+):
+    original = demo.write_report
+    original_open = Path.open
+
+    def write_report_then_block_manifest(findings, path):
+        original(findings, path)
+        if failure == "existing":
+            path.with_name("manifest.json").write_text("keep this", encoding="utf-8")
+
+    def guarded_open(path, *args, **kwargs):
+        if path.name == "manifest.json" and failure == "unwritable":
+            raise PermissionError("private filesystem detail")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(demo, "write_report", write_report_then_block_manifest)
+    monkeypatch.setattr(Path, "open", guarded_open)
+    output_dir = tmp_path / "partial"
+    with pytest.raises(SystemExit) as result:
+        demo.main(["--output-dir", str(output_dir)])
+    assert result.value.code == 2
+    captured = capsys.readouterr()
+    assert not captured.out
+    assert "private filesystem detail" not in captured.err
+    assert (output_dir / "findings.json").is_file()
+    assert (output_dir / "comparison.html").is_file()
+    if failure == "existing":
+        assert (output_dir / "manifest.json").read_text(encoding="utf-8") == "keep this"
+    else:
+        assert not (output_dir / "manifest.json").exists()
+    assert_closed(resources)
