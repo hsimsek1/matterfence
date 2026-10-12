@@ -70,6 +70,49 @@ This avoids identifying a later fixture revision as the one that was tested.
 There are no document bodies, raw responses, or absolute filesystem paths in
 the manifest. The findings and HTML retain their existing evidence formats.
 
+### Verify with one command
+
+From the repository root, run this read-only check:
+
+```sh
+python -m examples.verify_case_study case-study-output/auth-demo
+```
+
+It compares `findings.json` and `comparison.html` against the saved manifest.
+It does not execute a target, make network requests, modify files, parse findings
+for correctness, or render the HTML. It prints `MATCH` or `MISMATCH` for each file.
+Use the virtual-environment Python as described above if activation is unavailable.
+
+Fixture checking is optional and explicit:
+
+```sh
+python -m examples.verify_case_study case-study-output/auth-demo --fixture matterfence/core/mf_auth_001.json
+```
+
+Without `--fixture`, the output says `Fixture: NOT CHECKED`. The command does not
+infer a fixture path from the case label or any other manifest metadata. For the
+wall or exhibit case, select its corresponding fixture and output folder.
+
+Exit **0** means every requested byte comparison matched, **1** means at least
+one mismatch, and **2** means missing/unreadable files or invalid checksum input.
+An error takes precedence over a mismatch; partial comparisons are not printed.
+These are integrity-check outcomes, not containment verdicts. A report containing
+the intentional vulnerable FAIL (or an ERROR finding) can correctly verify with
+exit 0. A mismatch does not establish malicious tampering; even line-ending edits
+change the bytes. No repair or overwrite is attempted.
+
+The reader accepts manifest version `1.0`, requires exactly the two known artifact
+keys and lowercase 64-character SHA-256 values, and requires `fixture_sha256`
+even when fixture comparison is omitted. It rejects duplicate JSON fields,
+invalid UTF-8/JSON, manifests larger than 64 KiB, excessively nested JSON, and
+non-regular or symlink file inputs. It checks only the checksum-related fields;
+other metadata such as case, scenario identity, and timestamp is not validated
+or authenticated. Artifact names are fixed in code, never taken as arbitrary paths
+from the manifest. Use a stable local folder, not files concurrently modified by
+another process; this is not a hardened filesystem sandbox or signature checker.
+
+### Manual fingerprint comparison
+
 For the authorization command above, these PowerShell checks should each print
 `True` immediately after a successful export:
 
@@ -99,6 +142,35 @@ trusted timestamp. This slice does not capture the code revision, dependencies,
 or runtime environment and does not by itself make a run fully reproducible.
 Keep the relevant source revision and environment details alongside important
 runs. It does not authenticate the target's observations or prove security.
+
+### Verification function walkthrough
+
+The reader is [examples/verify_case_study.py](../examples/verify_case_study.py).
+It uses only Python's standard library and remains a source-checkout helper.
+
+- `_unique_object(pairs)` receives JSON key/value pairs and returns a dictionary;
+  duplicate keys raise an error instead of silently replacing an earlier value.
+- `_read_hashes(output_dir)` receives the evidence folder, reads a bounded
+  manifest, and returns the validated artifact-hash mapping and fixture hash.
+  Malformed or unsupported checksum inputs raise `ValueError` before artifact
+  hashing begins. Filesystem failures propagate to the caller.
+- `_file_hash(path)` receives a regular, non-symlink file path and returns its
+  hexadecimal SHA-256 digest. `file_digest` reads in chunks, avoiding loading an
+  entire report into memory. The file is opened read-only and closed afterward.
+- `verify_evidence(output_dir, fixture=None)` receives the folder and optional
+  explicit fixture path and returns a dictionary of filename-to-boolean matches.
+  It reads only the fixed artifact names and the explicitly supplied fixture.
+- `main(argv=None)` takes command arguments, prints comparisons and their limits,
+  and returns 0 or 1. Input/read failures exit 2 with a generic message rather
+  than raw exception details. The module passes the result to `sys.exit`.
+
+The [verifier tests](../tests/test_verify_case_study.py) check unchanged input
+bytes, matching and changed files, missing files, malformed manifests, unsafe
+keys, optional fixture behavior, and safe errors. They simulate symlink detection
+without requiring Windows symlink privileges. Subprocess tests verify actual
+output from all three demos, including the expected vulnerable FAIL. One test
+replaces a report **and** updates its recorded hash: verification matches,
+explicitly demonstrating why unsigned checksums are not authentication.
 
 ## Functions to understand
 

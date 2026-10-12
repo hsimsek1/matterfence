@@ -129,6 +129,15 @@ the vulnerable failure is intentional. Every run requires a new output folder.
 fingerprints of the loaded fixture and saved artifacts. These identify exact
 bytes, not authenticated evidence. See the
 [manifest walkthrough](docs/case-study-demo.md#identify-and-check-saved-evidence).
+Check saved files without rerunning the demo:
+
+```sh
+python -m examples.verify_case_study case-study-output/auth-demo
+```
+
+This prints byte-level `MATCH`/`MISMATCH`, not security verdicts. Add
+`--fixture matterfence/core/mf_auth_001.json` to check the fixture too. See the
+[verification command](docs/case-study-demo.md#verify-with-one-command) for exit codes.
 
 For the poisoned exhibit, use `--case exhibit` and another output folder.
 For an explicit ethical screen overriding team and privileged access, use
