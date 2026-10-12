@@ -259,7 +259,8 @@ python -m ruff check .
 ```
 
 GitHub Actions runs these checks, the secure golden scenario, and the packaged
-reference-app integration on Python 3.12.
+reference-app integration on Python 3.12 on both Ubuntu and Windows. Both jobs
+finish independently so a failure on one platform does not cancel the other.
 It also builds a wheel (the installable Python package), installs it with pytest
 in a fresh virtual environment, and tests the installed command from an empty
 temporary directory. This catches missing scenario JSON and broken command entry
@@ -267,6 +268,17 @@ points, missing HTML report assets, and reference-app integration problems.
 These installed-package tests run
 in the regular suite too; the fresh CI environment verifies the wheel
 independently of the source checkout.
+
+The wheel-check step takes the runner's temporary and checkout directories,
+builds one wheel, installs it into a new virtual environment, and runs the six
+installed-package pytest cases from outside the checkout. It selects the Windows
+or Unix Python path explicitly; any failed subprocess fails the job. The tests
+verify version output, bundled scenario/report assets, verdict exit codes, and
+the reference application's HTTP integration and shutdown.
+
+A green hosted Windows run does not override local Windows App Control or other
+device policies. If a local executable is blocked, retain the error for diagnosis;
+do not disable security protections or skip installed-command tests to hide it.
 
 See the [audit and milestone walkthrough](docs/mf-auth-001.md) for the scenario
 contract, function inputs/outputs, tests, remaining limitations, and PR scope.
