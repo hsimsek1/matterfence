@@ -125,6 +125,10 @@ ports automatically, and closes both servers. Open
 `case-study-output/auth-demo/comparison.html` for labeled, side-by-side results;
 `findings.json` holds the same evidence. Expect **FAIL / PASS and exit code 1**:
 the vulnerable failure is intentional. Every run requires a new output folder.
+`manifest.json` records the case, scenario, UTC creation time, and SHA-256
+fingerprints of the loaded fixture and saved artifacts. These identify exact
+bytes, not authenticated evidence. See the
+[manifest walkthrough](docs/case-study-demo.md#identify-and-check-saved-evidence).
 
 For the poisoned exhibit, use `--case exhibit` and another output folder.
 For an explicit ethical screen overriding team and privileged access, use
