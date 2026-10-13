@@ -15,6 +15,13 @@ Actual output from the bundled synthetic scenario. Download the
 [example HTML report](docs/example-report.html) to explore the full evidence in
 your browser; GitHub shows the HTML source.
 
+For a guided introduction, open `docs/index.html` from a checkout: the
+[no-install showcase](docs/index.html) explains the boundary and links to the
+actual sample report. No server or API key is needed to view these files.
+The [presentation and review guide](docs/reviewer-guide.md) includes a two-minute
+walkthrough, an independent-review checklist, and the next zero-budget milestones.
+The walkthrough is a script, not a recorded video; outside validation remains planned.
+
 ## Install and run
 
 Requires Python 3.12 or newer. From a fresh clone:
