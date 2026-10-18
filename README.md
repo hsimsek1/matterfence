@@ -68,7 +68,7 @@ not a broken installation. Accordingly, this default command exits with code 1.
 
 ### View the evidence
 
-No server, account, API key, or internet connection is needed to view the report.
+Once saved locally, the report needs no server, account, API key, or internet connection.
 On a wide screen the vulnerable and secure results appear side by side, with the actor,
 access boundary, retrieval IDs, forbidden-document evidence, and remediation.
 On a narrow screen the cards stack. Use your browser's Print command if needed.
