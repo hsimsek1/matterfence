@@ -13,6 +13,20 @@ from matterfence.targets.mock import SecureMockTarget, VulnerableMockTarget
 DOCS = Path(__file__).resolve().parents[1] / "docs"
 
 
+def test_readme_introduction_links_to_live_demo_and_offline_files():
+    """Keep both hosted previews and offline sources ahead of installation."""
+    readme = (DOCS.parent / "README.md").read_text(encoding="utf-8")
+    introduction = readme.split("\n## Install and run", maxsplit=1)[0]
+    links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", introduction)
+    public_site = "https://hsimsek1.github.io/matterfence/"
+
+    assert public_site in links
+    assert public_site + "example-report.html" in links
+    for filename in ("index.html", "example-report.html"):
+        assert f"docs/{filename}" in links
+        assert (DOCS / filename).is_file()
+
+
 class ShowcaseParser(HTMLParser):
     """Collect static markup, readable text, and text belonging to result cards."""
 

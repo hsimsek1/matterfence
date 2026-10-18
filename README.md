@@ -3,6 +3,12 @@
 Adversarial security testing for legal AI. MatterFence asks: **can an AI
 application retrieve or disclose a document that its user is forbidden to access?**
 
+[Explore the live demo](https://hsimsek1.github.io/matterfence/) ·
+[Open the sample report](https://hsimsek1.github.io/matterfence/example-report.html)
+
+No installation, account, or API key needed. This read-only preview shows a
+synthetic vulnerable FAIL and secure PASS; it does not run a live model or accept uploads.
+
 Today this is a local test harness with deterministic evaluation, synthetic
 law-firm data, and deliberately vulnerable and secure mocks. A local HTTP adapter
 can also test a separately running application that implements the documented
@@ -11,13 +17,11 @@ or certify security or legal compliance.
 
 ![MatterFence report showing one vulnerable FAIL and one secure PASS](docs/example-report.png)
 
-Actual output from the bundled synthetic scenario. Download the
-[example HTML report](docs/example-report.html) to explore the full evidence in
-your browser; GitHub shows the HTML source.
-
-For a guided introduction, open `docs/index.html` from a checkout: the
-[no-install showcase](docs/index.html) explains the boundary and links to the
-actual sample report. No server or API key is needed to view these files.
+Actual output from the bundled synthetic scenario. The live links above open
+the rendered preview directly. For offline viewing, open the
+[showcase source](docs/index.html) from a checkout, or download the
+[example HTML report](docs/example-report.html) and open it in your browser.
+GitHub displays these source files as code; no server is needed to view them locally.
 The [presentation and review guide](docs/reviewer-guide.md) includes a two-minute
 walkthrough, an independent-review checklist, and the next zero-budget milestones.
 The walkthrough is a script, not a recorded video; outside validation remains planned.
@@ -69,9 +73,11 @@ On a wide screen the vulnerable and secure results appear side by side, with the
 access boundary, retrieval IDs, forbidden-document evidence, and remediation.
 On a narrow screen the cards stack. Use your browser's Print command if needed.
 
-To preview the output without installing, download the
-[synthetic example report](docs/example-report.html) and open it in your browser.
-GitHub displays its HTML source; use the file's download button to save it.
+To preview the output without installing, open the
+[hosted sample report](https://hsimsek1.github.io/matterfence/example-report.html).
+For offline use, download the [synthetic example report](docs/example-report.html)
+and open it in your browser. GitHub displays its HTML source; use the file's
+download button to save it.
 The example contains the same reproducible FAIL/PASS comparison, with no client
 data, scripts, or external assets.
 
