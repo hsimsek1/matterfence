@@ -12,8 +12,10 @@ synthetic vulnerable FAIL and secure PASS; it does not run a live model or accep
 Today this is a local test harness with deterministic evaluation, synthetic
 law-firm data, and deliberately vulnerable and secure mocks. A local HTTP adapter
 can also test a separately running application that implements the documented
-query contract. MatterFence does not perform semantic search, include an LLM,
-or certify security or legal compliance.
+query contract. An [optional local-model pilot](docs/local-llm-experiment.md)
+connects the synthetic SQLite exhibit case to a separately installed Ollama model.
+The default CLI remains deterministic. MatterFence does not bundle model weights,
+perform semantic search, or certify security or legal compliance.
 
 ![MatterFence report showing one vulnerable FAIL and one secure PASS](docs/example-report.png)
 
