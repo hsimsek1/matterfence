@@ -17,6 +17,14 @@ OPTIONS = {
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 
+class IncompleteChatResponse(ValueError):
+    """An invalid reply may still contain observed assistant text, not a success."""
+
+    def __init__(self, partial_content: str | None):
+        super().__init__("Incomplete or unsupported Ollama answer")
+        self.partial_content = partial_content
+
+
 class OllamaClient:
     """Send only to local Ollama; callers own and close this client's connection."""
 
@@ -108,5 +116,13 @@ class OllamaClient:
             or message.get("tool_calls")
         ):
             self.calls[-1]["error"] = "InvalidChatResponse"
-            raise ValueError("Incomplete or unsupported Ollama answer")
+            # Keep only observed assistant content, never thinking or other roles.
+            partial = None
+            if (
+                isinstance(message, dict)
+                and message.get("role") == "assistant"
+                and isinstance(message.get("content"), str)
+            ):
+                partial = message["content"]
+            raise IncompleteChatResponse(partial)
         return message["content"]

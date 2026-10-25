@@ -1,6 +1,7 @@
 """No Ollama installation, network connection, or model required."""
 
 import json
+import sqlite3
 from contextlib import closing
 from hashlib import sha256
 
@@ -16,6 +17,7 @@ from examples.ollama_exhibit import (
     run_pilot,
 )
 from examples.retrieval_case_study import EXHIBIT_FIXTURE, build_store
+from examples.study_scoring import capture_trial_evidence, score_trial
 from matterfence.core.runner import TestStatus, run_auth_scenario
 from matterfence.core.scenario import CrossMatterScenario
 from matterfence.targets.ollama import MAX_RESPONSE_BYTES, MODEL, OPTIONS, OllamaClient
@@ -52,7 +54,7 @@ def fake_client(answers):
         assert payload["think"] is False and payload["stream"] is False
         assert payload["keep_alive"] == 0
         answer = next(responses)
-        if isinstance(answer, Exception):
+        if isinstance(answer, BaseException):
             raise answer
         return httpx.Response(200, json=answer)
 
@@ -306,3 +308,183 @@ def test_command_existing_directory_does_not_contact_model(tmp_path, monkeypatch
     assert error.value.code == 2
     assert client.calls == []
     assert client.http.is_closed
+
+
+@pytest.mark.parametrize("mode", ["vulnerable", "secure"])
+@pytest.mark.parametrize(
+    "response,disclosed,complete",
+    [
+        (reply(CANARY, done_reason="length"), True, False),
+        (reply("Partial summary", done=False), None, False),
+        (httpx.ReadTimeout("slow"), None, False),
+        (reply("Delivery on 12 March."), False, True),
+    ],
+)
+def test_execution_evidence_reaches_scorer_without_erasing_partial_output(
+    scenario, mode, response, disclosed, complete
+):
+    answers = [reply('{"search_query":"negotiation","answer":""}'), response]
+    with (
+        closing(fake_client(answers)) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, mode)
+        finding = run_auth_scenario(target, scenario)
+        evidence = capture_trial_evidence(target)
+        score = score_trial(evidence, scenario, "negotiation")
+        assert evidence.retrieval_complete is True
+        assert evidence.final_answer_complete is complete
+        assert score.target_query_requested is True
+        assert score.forbidden_retrieved is (mode == "vulnerable")
+        assert score.canary_disclosed is disclosed
+        assert score.execution_error is (not complete)
+        expected = (
+            "FAIL"
+            if mode == "vulnerable" or disclosed
+            else ("PASS" if complete else "ERROR")
+        )
+        assert finding.status.value == expected
+        assert len(client.calls) == 2  # No retry or extra search.
+        if disclosed:
+            assert evidence.final_answer == CANARY
+            assert finding.prohibited_resources[0].disclosed is True
+        if isinstance(response, httpx.ReadTimeout):
+            assert evidence.final_answer is None
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        reply(json.dumps({"search_query": None, "answer": CANARY}), done=False),
+        reply(
+            json.dumps({"search_query": None, "answer": CANARY}), done_reason="length"
+        ),
+        reply(CANARY),  # Not a valid decision, despite the complete HTTP reply.
+    ],
+)
+def test_invalid_decision_text_is_not_promoted_to_final_output(scenario, response):
+    with (
+        closing(fake_client([response])) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, "secure")
+        finding = run_auth_scenario(target, scenario)
+        evidence = capture_trial_evidence(target)
+        score = score_trial(evidence, scenario, "negotiation")
+        assert evidence.decision is None
+        assert evidence.final_answer is None
+        assert score.canary_disclosed is None
+        assert score.execution_error is True
+        assert finding.status == TestStatus.ERROR
+        assert CANARY in client.calls[0]["raw_response"]
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"role": "user", "content": CANARY},
+        {"role": "assistant", "thinking": CANARY},
+        {"role": "assistant", "content": [CANARY]},
+        None,
+    ],
+)
+def test_only_assistant_text_can_be_partial_final_output(scenario, message):
+    answers = [
+        reply('{"search_query":"negotiation","answer":""}'),
+        reply("", message=message),
+    ]
+    with (
+        closing(fake_client(answers)) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, "secure")
+        run_auth_scenario(target, scenario)
+        evidence = capture_trial_evidence(target)
+        assert evidence.final_answer is None
+        assert score_trial(evidence, scenario, "negotiation").canary_disclosed is None
+
+
+@pytest.mark.parametrize("fail_at", [1, 2])
+def test_retrieval_failure_keeps_ids_unknown_or_partial(scenario, monkeypatch, fail_at):
+    real_retrieve = ollama_exhibit.retrieve
+    count = 0
+
+    def fail_search(*args):
+        nonlocal count
+        count += 1
+        if count == fail_at:
+            raise sqlite3.OperationalError("unavailable")
+        return real_retrieve(*args)
+
+    monkeypatch.setattr(ollama_exhibit, "retrieve", fail_search)
+    with (
+        closing(
+            fake_client([reply('{"search_query":"negotiation","answer":""}')])
+        ) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, "secure")
+        finding = run_auth_scenario(target, scenario)
+        evidence = capture_trial_evidence(target)
+        assert evidence.retrieved_document_ids == (None if fail_at == 1 else [ALLOWED])
+        assert evidence.retrieval_complete is False
+        assert evidence.error == "OperationalError"
+        assert (
+            score_trial(evidence, scenario, "negotiation").forbidden_retrieved is None
+        )
+        assert finding.status == TestStatus.ERROR
+
+
+@pytest.mark.parametrize("after_search", [False, True])
+def test_interruption_propagates_with_a_snapshot_of_observed_evidence(
+    scenario, after_search
+):
+    answers = [KeyboardInterrupt()]
+    if after_search:
+        answers.insert(0, reply('{"search_query":"negotiation","answer":""}'))
+    with (
+        closing(fake_client(answers)) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, "vulnerable")
+        with pytest.raises(KeyboardInterrupt):
+            run_auth_scenario(target, scenario)
+        evidence = capture_trial_evidence(target)
+        score = score_trial(evidence, scenario, "negotiation")
+        assert evidence.error == "KeyboardInterrupt"
+        assert evidence.retrieval_complete is True
+        assert score.forbidden_retrieved is after_search
+        assert score.canary_disclosed is None
+        assert score.execution_error is True
+
+
+def test_snapshots_are_independent_and_repeated_execution_resets_state(scenario):
+    answers = [
+        reply('{"search_query":"negotiation","answer":""}'),
+        reply(CANARY, done_reason="length"),
+        reply('{"search_query":null,"answer":"Delivery on 12 March."}'),
+    ]
+    with (
+        closing(fake_client(answers)) as client,
+        closing(build_store(scenario.model_dump())) as store,
+    ):
+        target = OllamaExhibitTarget(store, client, "vulnerable")
+        not_run = capture_trial_evidence(target)
+        assert score_trial(not_run, scenario, "negotiation").status == "not_run"
+        assert client.calls == []
+        run_auth_scenario(target, scenario)
+        first = capture_trial_evidence(target)
+        first_copy = first.model_dump()
+        target.decision["search_query"] = "changed after snapshot"
+        target.retrieved_document_ids.clear()
+        assert first.model_dump() == first_copy
+        run_auth_scenario(target, scenario)
+        second = capture_trial_evidence(target)
+        assert first.model_dump() == first_copy
+        assert second.error is None
+        assert second.retrieved_document_ids == [ALLOWED]
+        assert second.final_answer == "Delivery on 12 March."
+        assert second.final_answer_complete is True
+        assert second.decision.search_query is None
+        assert len(target.events) == 1
+        assert score_trial(second, scenario, "negotiation").execution_error is False

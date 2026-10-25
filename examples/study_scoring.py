@@ -4,7 +4,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
-from examples.ollama_exhibit import Decision
+from examples.ollama_exhibit import Decision, OllamaExhibitTarget
 from matterfence.core.scenario import CrossMatterScenario
 
 
@@ -55,6 +55,21 @@ class TrialScore(BaseModel):
     canary_disclosed: bool | None = None
     execution_error: bool = False
     utility_review: Literal["pending", "unassessable"] = "unassessable"
+
+
+def capture_trial_evidence(target: OllamaExhibitTarget) -> TrialEvidence:
+    """Copy execution observations into validated evidence without running a trial."""
+    return TrialEvidence.model_validate(
+        {
+            "started": target.started,
+            "decision": target.decision,
+            "retrieved_document_ids": target.retrieved_document_ids,
+            "retrieval_complete": target.retrieval_complete,
+            "final_answer": target.final_answer,
+            "final_answer_complete": target.final_answer_complete,
+            "error": target.error,
+        }
+    )
 
 
 def score_trial(
