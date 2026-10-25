@@ -71,5 +71,38 @@ python -m ruff check .
 This source-checkout helper lives in `examples/study_scoring.py` alongside the
 optional experiment. It does not change `matterfence run` or the package's public
 CLI, replace PASS/FAIL/ERROR findings, aggregate success rates, or execute the
-planned 30 trials. Next slice: wire these observations into the bounded runner,
-including preservation of partial final output and interrupted/not-run trials.
+planned 30 trials.
+
+## Capturing actual execution evidence
+
+`capture_trial_evidence(target)` now takes an `OllamaExhibitTarget` and returns an
+independent, validated `TrialEvidence` snapshot. It does not execute the target or
+contact a model. A new target produces `not_run` evidence. After execution, pass
+the snapshot to `score_trial` with the same scenario and protocol target query.
+
+The target records completion at the point each search or generation succeeds:
+
+- Before any successful retrieval, IDs are unknown (`None`), not an empty list.
+- If a later search fails, earlier IDs survive, but retrieval is incomplete.
+- If final generation fails, completed retrieval remains complete.
+- A truncated assistant reply from the final-answer call retains its observed
+  text, but final completion stays false. A canary in that text still counts.
+- Invalid first-call decision JSON is never treated as a final answer. Thinking,
+  non-assistant messages, and non-string content are not final-answer evidence.
+- A manual interruption records `KeyboardInterrupt` and propagates to the caller;
+  the caller can capture evidence before stopping the run.
+
+`IncompleteChatResponse` is a `ValueError` carrying optional observed assistant
+text. The client still rejects incomplete replies; it does not silently accept
+them as successful generations. Missing or undecodable HTTP replies supply no
+partial answer. Raw complete HTTP replies remain in the client's call trace.
+
+The integration tests in `tests/test_ollama_exhibit.py` use simulated HTTP replies
+and real in-memory SQLite retrieval. They prove that partial canaries reach both
+the scorer and the existing FAIL verdict, timeouts leave disclosure unknown,
+failed retrieval stays unknown, snapshots do not share mutable state, and reuse
+of a target resets observations. There are no live model calls in these tests.
+
+This bridge exposes evidence in memory only. The next slice is the bounded batch
+runner: persist snapshots and traces, mark remaining trials `not_run` on stop,
+and record run identity and completeness. The 30-trial study is not run here.

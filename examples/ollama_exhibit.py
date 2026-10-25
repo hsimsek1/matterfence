@@ -19,7 +19,7 @@ from matterfence.core.scenario import CrossMatterScenario
 from matterfence.report import write_report
 from matterfence.synthetic_firm.models import Document, Matter, User
 from matterfence.targets.mock import BaseLegalTarget, TargetResult
-from matterfence.targets.ollama import OPTIONS, OllamaClient
+from matterfence.targets.ollama import OPTIONS, IncompleteChatResponse, OllamaClient
 
 CONDITIONS = [
     (exhibit, mode)
@@ -67,6 +67,11 @@ class OllamaExhibitTarget(BaseLegalTarget):
         self.events: list[dict] = []
         self.decision: dict | None = None
         self.error: str | None = None
+        self.started = False
+        self.retrieved_document_ids: list[str] | None = None
+        self.retrieval_complete = False
+        self.final_answer: str | None = None
+        self.final_answer_complete = False
 
     def query_matter(self, user: User, matter: Matter, prompt: str) -> str:
         raise NotImplementedError("This pilot supports observed retrieval only")
@@ -82,11 +87,17 @@ class OllamaExhibitTarget(BaseLegalTarget):
     def retrieve(self, user: User, matters: list[Matter], prompt: str) -> TargetResult:
         """Return final model text and actual SQLite IDs, retaining IDs on errors."""
         self.events, self.decision, self.error = [], None, None
+        self.started = True
+        self.retrieved_document_ids = None
+        self.retrieval_complete = False
+        self.final_answer = None
+        self.final_answer_complete = False
         ids: list[str] = []
-        answer = ""
+        final_generation = False
 
         def search(query: str, mode: str) -> dict:
             # Actor and mode come from trusted code, never the model's JSON.
+            self.retrieval_complete = False
             result = retrieve(self.store, user.id, query, mode)
             ids.extend(
                 item for item in result["retrieved_document_ids"] if item not in ids
@@ -94,6 +105,8 @@ class OllamaExhibitTarget(BaseLegalTarget):
             self.events.append(
                 {"user_id": user.id, "query": query, "mode": mode, "result": result}
             )
+            self.retrieved_document_ids = list(ids)
+            self.retrieval_complete = True
             return result
 
         try:
@@ -114,10 +127,11 @@ class OllamaExhibitTarget(BaseLegalTarget):
             decision = Decision.model_validate_json(raw)
             self.decision = decision.model_dump()
             if decision.search_query is None:
-                answer = decision.answer
+                self.final_answer = decision.answer
             else:
                 followup = search(decision.search_query, self.mode)
-                answer = self.client.chat(
+                final_generation = True
+                self.final_answer = self.client.chat(
                     messages
                     + [
                         {"role": "assistant", "content": raw},
@@ -134,15 +148,20 @@ class OllamaExhibitTarget(BaseLegalTarget):
                         },
                     ]
                 )
-            return TargetResult(response_text=answer, retrieved_document_ids=ids)
+            self.final_answer_complete = True
         except (httpx.HTTPError, ValueError, TypeError, sqlite3.Error) as exc:
-            # A final-answer error must not erase an already observed forbidden read.
+            # Decision JSON is not final output, even if it contains a canary.
+            if final_generation and isinstance(exc, IncompleteChatResponse):
+                self.final_answer = exc.partial_content
             self.error = type(exc).__name__
-            return TargetResult(
-                response_text=answer,
-                retrieved_document_ids=ids,
-                error=f"Local-model experiment: {type(exc).__name__}",
-            )
+        except KeyboardInterrupt:
+            self.error = "KeyboardInterrupt"
+            raise
+        return TargetResult(
+            response_text=self.final_answer or "",
+            retrieved_document_ids=self.retrieved_document_ids,
+            error=f"Local-model experiment: {self.error}" if self.error else None,
+        )
 
 
 def _save(path: Path, value: object) -> None:
